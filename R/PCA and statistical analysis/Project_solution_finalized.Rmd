@@ -1,0 +1,1035 @@
+---
+title: "Advanced_statistics_Project"
+author: "James Peter"
+date: "May 7, 2018"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+```{r, include=FALSE}
+Sys.setenv(JAVA_HOME= 'C:\\Program Files\\Java\\jre-9.0.4')
+library(psych)
+library(xlsx)
+library(foreign)
+library(MASS)
+library(car)
+library(ggplot2)
+library(nortest)
+library(WRS2)
+```
+
+```{r, include=FALSE}
+#household <- read.xlsx("Household Data.xlsx", header = TRUE, sheetIndex = 1)
+household <- read.csv("PL_X_SELL.csv", header = TRUE)
+str(household)
+head(household)
+```
+
+```{r, echo=FALSE}
+summary(household[2:10])
+```
+
+```{r, echo=FALSE}
+framed <- par(mfrow=c(1,2),bg=("cornsilk2"))
+hist(household$Balance/100000, xlab = "Balance('00000')", col = c("steelblue1"), main = "Distribution of Balance")
+col <- c("darkolivegreen3")
+plot(x=c(1:nrow(household)), y=household$Balance, col=alpha(col,0.5),pch=16, xlab = "Row Index", ylab = "Balance", main = "Spread of Balance")
+```
+
+## Observation
+* The distribution of average quarterly balance of the deposit account holder is right skewed and the difference between the mean and medium is significant which is at 66,425.00, the higher balance amount has huge impact as expected on the total balance. 
+* The scatter plot shows 12 points which are way above 100,000.00 so it could be considered as outliers, so the effect of this 12 points is higher on mean; if the mean of balance is used as a critical measure for drawing any conclusion. And it will be good measure to check the effects by including and excluding those 12 points while conducting any kind of analysis if required. 
+
+```{r, echo=FALSE}
+ggplot(household, aes(Occupation, ..count..)) + geom_bar()
+```
+
+## Observation
+* The are good total number of observations for all the Occupation types, and the Occupation factor can be considered as balanced factor for conducting the one-way ANOVA.
+
+
+```{r, echo=FALSE}
+ggplot(household, aes(Gender, ..count..)) + geom_bar(aes(fill=Occupation), position = "dodge")
+```
+
+## Observation
+* Withing gender levels theire are good amount of observations for each occupation type. But the "O" Gender type which represents company has every less total number of observations as compared to other two genders; which makes the Gender factor an unbalanced factor for ANOVA analysis, which would require to conduct robust analysis of variance to confirm the significance of variance.
+
+
+```{r, echo=FALSE}
+boxplot(household$Balance ~ household$Occupation, horizontal=TRUE, notch=TRUE, col=(c("darkslategray4","darkturquoise","darkseagreen1","darkslategray1")))
+```
+
+## Observation
+* The boxplot shows several points which are above the maximum considered by the boxplot and considers those points above the maximum as outliers. All the employments have types have considerable amount of outliers in the data. For the Self-employment and salary employment the values above 400,000.00 are considered outliers and for professional employment type values above approximately 500,000.00 are considered outliers. And for self-employed non-professionals values close to 600,000.00 and above are considered outliers.
+
+## Visualizing the Gender:Occupation for two-way ANOVA
+```{r, echo=FALSE}
+plot(Balance/100000~interaction(Gender, Occupation), par(mar=c(10,8,2,2)+0.1), data = household, las = 2, at=c(1,2,3,5,6,7,9,10,11,13,14,15), col= c('red','red','red','royalblue2','royalblue2','royalblue2','palevioletred1', 
+'palevioletred1','palevioletred1','sienna','sienna','sienna'), xlab="", ylab="")
+mtext("Gender . Occupation", side = 1, line = 6, cex = 1.2, font = 1)
+mtext("Balance('00000')", side = 2, line = 3, cex = 1.2, font = 1)
+```
+
+## Observation
+* The interaction boxplot for each factors shows are are considerable amount of outliers and no observation for "O.SENP" which would be treated as 'NA' when two-way ANOVA is conducted.
+
+
+# How to deal with outliers while conducting ANOVA
+* Means, standard deviations are highly sensitive to outliers.  And since the assumptions of regression and ANOVA, are also based on these statistics. ANOVA and Regression models rely heavily on the normality assumption. So the presence of outliers can severely distort the analysis. To deal with this problem when the assumptions of ANOVA are violated robust method analysis needs to be conducted to verify the ANOVA results.
+
+#ANOVA test hypotheses:
+
+    Null hypothesis: the means of the different groups are the same
+    Alternative hypothesis: At least one sample mean is not equal to the others.
+
+Assumption of ANOVA test:
+* The observations are obtained independently and randomly from the population defined by the factors levels.
+* The data of each factor level are normally distributed
+* The factor levels have a common variance
+
+
+## Normality test
+```{r,echo=FALSE}
+#Anderson-Darling normality test for Gender
+for (i in unique(factor(household$Occupation))){
+  cat(i,":",ad.test(household[household$Occupation==i,]$Balance)$p.value,"| ")
+}
+
+```
+
+## Interpretation of Anderson-Darling normality test which is alternative for Shapiro normality test:
+* The p-values for all the three factor levels under the Occupation factor is less than 0.05 at 95% significance, which tells that there are not normally distributed, which violates the normality assumption of ANOVA test.
+
+## Homogeneity of variance test
+```{r, echo=FALSE}
+# Variance Homogeneious test bases Occupation
+leveneTest(household$Balance~household$Occupation)
+```
+
+
+```{r, echo=FALSE}
+# Variance Homogeneious test bases Occupation
+bartlett.test(household$Balance~household$Occupation)
+```
+
+## Interpretation of LeveneTest and Bartlett test of homogeniety of variances:
+* Both the test confirm that the variance of all the factor levels are not homogeneous which means atleast one the pairs in the factor levels in the Occupation factor have different variance.
+* Among the two test, the LeveneTest provides accurate results which is immune to the violations of the normality of factor levels.
+* A p-value of < 2.2e-16 (significant) tells that the variance observed between factor level pairs are significant, which also the violates the homogeniety of variances assumption of ANOVA.
+
+# One-way ANOVA test
+```{r, echo=FALSE}
+bal <- aov(household$Balance~household$Occupation)
+summary(bal)
+```
+
+
+# Interpreting the results of one-way ANOVA tests
+* The p-value is less than the significance level 0.05 which is <2e-16 (significant) and tells that there are significant differences in variances between the factor levels of the Occupation factor. The variance of atleat one pair is different from the other factor levels pairs in the Occupation factor.
+
+
+# Multiple pairwise comparison between the means of groups
+* In one-way ANOVA test, a significant p-value indicates that some of the group means are different, but can tell among the groups which paris of groups are different.
+* As the ANOVA test is significant, TukeyHSD (Tukey Honest Significant Differences) function performs multiple pairwise-comparison between the groups and makes it possible to analyze the pairs of groups which different variance.
+
+```{r, echo=FALSE}
+TukeyHSD(bal)
+```
+
+## Interpretation of TukeyHSD results:
+* diff: difference between means of the two groups
+* lwr, upr: the lower and the upper end point of the confidence interval at 95%
+* p adj: p-value after adjustment for the multiple comparisons.
+* The result tells that there is significance difference in variance between all the pairs except the Self-employed and Salary pair.
+
+```{r, echo=FALSE}
+plot(TukeyHSD(bal))
+```
+
+## Interpretation of TukeyHSD 95% family-wise confidence level plot:
+* The 95% confidence interval of the occupation type pairs are far away from the zero variance, except the Self-employed and Salary pair. If all the other pairs had similar interval then the null hypothesis that there is no differece in varaince would have been accepted, and all the interval would have crossed the zero variance as part of the 95% confidence level. But in this case that does not happen.
+* Hence the null hypothesis can be rejected and accept the alternate hypothesis that there exist difference in variance of Occupation type and have different means.
+* So, while implementing any strategy Occupation type is an important factor to be considered as it has a impact on the average quarterly balance of deposit account cutomers.
+
+
+# Robust methods one-way ANOVA: As Assumptions are violated
+```{r echo=FALSE}
+oneway.test(household$Balance~household$Occupation, var.equal = FALSE)
+```
+
+
+```{r, echo=FALSE}
+one_model <- lm(Balance~Occupation, data = household)
+print(one_model)
+Anova(one_model, Type="II", white.adjust=TRUE)
+```
+
+
+## Interpretation of Robust methods:
+* One-way analysis of means which assumes that factor levels do not have equal variance, provides significant results. The p-value < 2.2e-16 (significant) tells that atleast one pair in factor levels have different variance.
+* The results obtained by Anova Table (Type II tests) assumes the Occupation factor has unbalanced observations for the factor levels, But the results provided by the Type II test confirms the result obtained by the previous two ANOVA methods that the difference in variance is significant inspite of taking into considerations the Occupation factor is unbalanced, White.adjust parameter when set to TRUE use a heteroscedasticity-corrected coefficient covariance matrix. Basic forms of models make use of the assumption that the errors have the same variance across all observation points. When this is not the case, the errors are said to be heteroscedastic, Heteroscedasticity-consistent standard errors are used to allow the fitting of a model that does contain heteroscedastic residuals.
+* Since, the results obtained by the robust methods also provides significant results. We reject the null hypothesis and accept the alternate hypothesis that exist a difference in the variance for the average quarterly balance and the means of the occupation types are different from one another.
+
+
+# Two-way ANOVA
+
+## Two-way ANOVA test hypotheses for Gender and Occupation
+1. There is no difference in means of factor Gender
+2. There is no difference in means of factor Occupation
+3. There is no interaction between factors Gender and Occupation
+
+The alternative hypothesis for cases 1 and 2 is the means are not equal
+The alternative hypothesis for case 3 is there is an interaction between Gender and Occupation
+
+## Assumptions of two-way ANOVA test
+Two-way ANOVA test assumes that the observations within each cell are normally distributed and have equal variances. 
+```{r, echo=FALSE}
+table(household$Gender, household$Occupation)
+```
+
+
+```{r, echo=FALSE}
+tapply(household$Balance, list(household$Gender, household$Occupation), mean)
+print('')
+print('-----------------------------------------')
+tapply(household$Balance, list(household$Gender, household$Occupation), sd)
+```
+
+## Observation
+* The table value provides an insight the data is unbalanced especially the "O" factor level which has less observations under different employment levels and even has zero observation for SENP (Self-Employed Non-Professionals). The zero observation is treated as NA(Not Available).
+
+
+```{r, echo=FALSE}
+# interaction plot
+interaction.plot(household$Gender, household$Occupation, household$Balance,
+                 fun = mean, type="b", xlab="Gender",
+                 ylab="Balance(mean value)")
+```
+
+## Observation
+* The Interaction plot shows difference in mean among the Gender, Occupation and interactions.
+
+
+```{r, echo=FALSE}
+# Two-way ANOVA
+bal2 <- aov(Balance ~ Gender + Occupation + Gender:Occupation, data=household)
+summary(bal2)
+```
+
+
+## Results Interpretion:
+* the p-value of Gender is < 2e-16 (significant), which indicates that the Genders are associated with significant different Balance amount.
+* the p-value of Occupation is < 2e-16 (significant), which indicates that the Occupation type are associated with significant different Balance amount.
+* the p-value for the interaction between Gender:Occupation is 0.0022 (significant), which indicates that the relationships between Gender and Occupation depends on the Gender.
+
+## Normality test
+```{r, echo=FALSE}
+plot(bal2, 2)
+```
+
+## Anderson-Darling normality test
+```{r, echo=FALSE}
+# Extracting the residuals
+bal2_residuals <- residuals(bal2)
+
+#Anderson-Darling normality test
+ad.test(bal2_residuals)
+```
+
+## Homogeneity of variance test
+```{r, echo=FALSE}
+# Levene Test
+leveneTest(Balance ~ Gender * Occupation, data=household)
+```
+
+## Interpretation of Normality tests and Homogeneity test:
+* The Normality plot of the residuals, the normality probability plot of the residuals should approximately follow a straight line. As large number of residuals points do not follow the reference line, we cannot assume normality and the residuals are not normally distributed. And the also the it has some points at the top of the curve which are treated as outliers.
+* The Anderson-Darling normality test also provides p-value < 2.2e-16 which confirms the data is not normally distributed and hence the normality assumption is violated.
+* The Levene's Test restults reveals that the homogeneity of variance assumption is also violated.
+
+
+## Multiple pairwise comparison between the means of groups
+* In ANOVA test, a significant p-value indicates that some of the group means are different, but we don't know which pairs of groups are different. Multiple pariwise comparison can be performed to determine if the mean difference between specific pairs of group are statisfically different
+
+```{r, echo=FALSE}
+# TukeyHSD (Tukey Honest Significant Differences)
+TukeyHSD(bal2, which = c("Occupation", "Gender:Occupation"))
+```
+
+## Plot for Gender given by TukeyHSD of two-way ANOVA of Gender and Occupation
+```{r}
+plot(TukeyHSD(bal2, which = c("Gender")))
+```
+
+## Plot for Occupation given by TukeyHSD of two-way ANOVA of Gender and Occupation
+```{r}
+plot(TukeyHSD(bal2, which = c("Occupation")))
+```
+
+## Plot for Gender:Occupation interaction effect given by TukeyHSD of two-way ANOVA of Gender and Occupation
+```{r}
+plot(TukeyHSD(bal2, which = c("Gender:Occupation")))
+```
+
+## Interpretation of TukeyHSD results:
+* diff: difference between means of two groups
+* lwr, upr: the lower and upper end point of the confidence interval at 95%
+* p adj: p-value after adjusting for multiple comparisons
+* The Self Employed and Salaried factor levels in the Occupation factor has equal variance and all other factor levels have different variances.
+* The plots generated using TukeyHSD give significant results all the pairs in Gender and Occupation except the "M-O" pair in Gender and SELF-EMP-SAL pair in Occupation which shows that the variance between those pairs are insignificant and have equal mean confirmed by the 95% confidence level which has 0 mean value as part of the confidence level.
+* But whereas for the interaction between Gender and Occupation where large amount of pairs which have insignificant variance among them as most the 95% confidence levels have 0 mean values in the intervals. So, taking call on the importance of interaction between Gender and Occupation will be a subjective call, and moreover results from robust methods can looked to take a scientific conclusion.
+* Most of the Interaction effect are not signficant for example O:SAL-M:PROF with p-value close to 1 and NA is for the SENP factor level of employment factor which has zero observation. Largely as there is no significant interaction type II approach can be considered for robust analysis
+
+# Robust Two-way ANOVA methods
+## Type-II robust method
+```{r, echo=FALSE}
+Anova(lm(Balance~Gender*Occupation, data=household))
+```
+
+## Type-III robust method
+```{r, echo=FALSE}
+Anova(lm(Balance~Gender*Occupation, data=household, 
+         contrasts=list(Gender=contr.sum, Occupation=contr.sum)), 
+      singular.ok=TRUE, type = 3)
+```
+
+
+## Interpretation of Robust methods:
+* When data is unbalanced, there are different ways to calculate the sums of squares for ANOVA. There are at least 3 approaches, commonly called Type I, II and III sums of squares. The aov offers SS type I and is for balanced factor, and Anova-Type II tests when the data is unbalanced. So, when the data is unbalanced the results provided by each method will be slightly different which can be observed comparing the F-statistic given by different methods even though p-value provided may be close, and if yet both the methods provide significant results then at confidence levels at which both the tests were conducted, it can be concluded that there is a signficant difference in the variance among factor levels for the tested factor.
+* As in this case the Gender factor was tested for equivalence of variance and results from all the methods tested so far provide significant results, with varying F-statistic because of the violation of assumptions and unbalanced data, it can be concluded at 95% confidence level beyond any doubt that there is a difference in variance between factor levels in the Gender factor, Occupation and Interaction between Gender and Occupation.
+* For type II approach that no significant interaction is assumed, due to the way in which the SS are calculated when incorporating the interaction effect, for type III you must specify the contrasts option to obtain sensible results and singula.ok is changed default False to True. Type III approach is this type tests for the presence of a main effect after the other main effect and interaction. This approach is therefore valid in the presence of significant interactions. However, it is often not interesting to interpret a main effect if interactions are present.
+* Type-II approach calculates according to the principle of marginality, testing each term after all others, except ignoring the term's higher-order relatives; so-called type-III tests violate marginality, testing each term in the model after all of the others.
+* The results given by Type II and Type III provides statistical significant and confirms that there exists difference in variance between the Gender factor and Occupation factor and interaction effect is also significant with p-value 0.00225 at 95% confidence level. Only difference being for the Occupation's main effect from Type III get a p-value of 7.4e-11 as against < 2e-16 given by Type II method.
+* Hence, based upon the results obtained from all the three methods, it can be concluded at 95% confidence level beyond any doubt that there is a difference in variance between factor levels in the Gender factor, Occupation and Interaction between Gender and Occupation. And the means are different, to reject the null hypothesis and accept the alternate hypothesis. So, while forming strategies the Gender, Occupation and interaction between Gender and Occupation should be considered as an important factors.
+
+
+# Principal Component Analysis
+```{r, include=FALSE}
+pca_bat <- read.csv("batting_bowling_ipl_bat.csv", header = TRUE)
+pca_ball <- read.csv("batting_bowling_ipl_bowl.csv", header = TRUE)
+pca_bat <- na.omit(pca_bat)
+pca_ball <- na.omit(pca_ball)
+str(pca_bat)
+head(pca_bat)
+str(pca_ball)
+head(pca_ball)
+```
+```{r, include=FALSE}
+rownames(pca_bat) <- seq(1,nrow(pca_bat))
+rownames(pca_ball) <- seq(1, nrow(pca_ball))
+bat_player_names <- pca_bat[,1]
+ball_player_names <- pca_ball[,1]
+head(bat_player_names)
+head(ball_player_names)
+length(bat_player_names)
+length(ball_player_names)
+head(pca_bat)
+head(pca_ball)
+```
+
+```{r, include=FALSE}
+pca_batvar <- pca_bat[,2:7]
+pca_ballvar <- pca_ball[,2:5]
+head(pca_batvar)
+head(pca_ballvar)
+```
+
+```{r, echo=FALSE}
+print("Batting Data Summary")
+summary(pca_batvar)
+print("Bowling Data Summary")
+summary(pca_ballvar)
+```
+
+## Observation
+* From the summary each variable in batting and bowling is normally distributed, except the half centuries, sixes, fours and ballers' strike rate variables which is slightly right skewed.
+
+# Visualization of Batting variables
+```{r, echo=FALSE}
+framed <- par(mfrow=c(2,3),bg=("cornsilk2"))
+par(mar=c(2,4.5,4.5,.1)+0.1)
+hist(pca_batvar$Runs, xlab = "", ylab = "", col = c("steelblue1"), main = "Runs")
+mtext("Frequency                              ", side = 2, line = 3, cex = 1.5, font = 1)
+hist(pca_batvar$Ave, xlab = "", ylab = "", col = c("steelblue1"), main = "Ave")
+mtext("Histogram of Runs, Ave, SR, Fours, Sixes, HF", side = 3, line = 3, cex = 1.3, font = 1)
+hist(pca_batvar$SR, xlab = "", ylab = "", col = c("steelblue1"), main = "SR")
+hist(pca_batvar$Fours, xlab = "", ylab = "", col = c("steelblue1"), main = "Fours")
+#mtext("Frequency", side = 2, line = 3, cex = 1.2, font = 1)
+hist(pca_batvar$Sixes, xlab = "", ylab = "", col = c("steelblue1"), main = "Sixes")
+hist(pca_batvar$HF, xlab = "", ylab = "", col = c("steelblue1"), main = "HF")
+```
+
+```{r, include=FALSE}
+library(corrplot)
+bat_cor <- cor(pca_batvar)
+ball_cor <- cor(pca_ballvar)
+print("Batting Data Correlation")
+print(bat_cor)
+print("Bowling Data Correlation")
+print(ball_cor)
+```
+```{r, echo=FALSE}
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+corrplot(bat_cor, method="color", col=col(200),  
+         type="lower", order="hclust", 
+         addCoef.col = "black", # Add coefficient of correlation
+         tl.col="black", tl.srt=45, #Text label color and rotation
+         # Combine with significance
+         #p.mat = p.mat, sig.level = 0.01, insig = "blank", 
+         # hide correlation coefficient on the principal diagonal
+         diag=FALSE 
+         )
+```
+
+## Observation from batting variables plots:
+* The first plot shows individual histograms for our "batting variables" based on the performance of the ninety batsmen who played in the 2012 IPL season (as per the dataset). 
+* Second plot depicts a matrix plot, and we see some significant correlations between these variables. For example, the plot shows that Runs and Fours, Runs and Sixes, and Ave and Runs are considerably correlated, as might be anticipated. This shows the necessity of using a technique which is capable of handling correlated data in any reasonable attempt to study batting performance. High values for each of these variables indicates better batting performance in a univariate sense, and each one measures a different quality of a batsman, but their joint contribution to batting performance in a multivariate sense needs to measured.
+* Constructing an overall measure of batting performance by collapsing these correlated variables is possible by using Principal Component Analysis.
+
+# Visualization of Balling variables
+```{r, echo=FALSE}
+framed <- par(mfrow=c(2,2),bg=("cornsilk2"))
+par(mar=c(2,4.5,4.5,.1)+0.1)
+hist(pca_ballvar$Wkts, xlab = "", ylab = "", col = c("steelblue1"), main = "Wkts")
+mtext("     Histogram of Wkts,", side = 3, line = 3, cex = 1.3, font = 1)
+mtext("Frequency                              ", side = 2, line = 3, cex = 1.5, font = 1)
+hist(pca_ballvar$Ave, xlab = "", ylab = "", col = c("steelblue1"), main = "Ave")
+mtext("Ave, Econ, SR                      ", side = 3, line = 3, cex = 1.3, font = 1)
+hist(pca_ballvar$Econ, xlab = "", ylab = "", col = c("steelblue1"), main = "Econ")
+#mtext("Frequency", side = 2, line = 3, cex = 1.2, font = 1)
+hist(pca_ballvar$SR, xlab = "", ylab = "", col = c("steelblue1"), main = "SR")
+#mtext("Title for Two Plots", outer = TRUE, cex = 1.5)
+
+```
+
+```{r, echo=FALSE}
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+corrplot(ball_cor, method="color", col=col(200),  
+         type="lower", order="hclust", 
+         addCoef.col = "black", # Add coefficient of correlation
+         tl.col="black", tl.srt=45, #Text label color and rotation
+         # Combine with significance
+         #p.mat = p.mat, sig.level = 0.01, insig = "blank", 
+         # hide correlation coefficient on the principal diagonal
+         diag=FALSE 
+         )
+```
+
+## Observations from balling variables plots
+* First plot shows individual histograms for our "bowling variables" based on the performance of the eighty-three bowlers who bowled in the 2012 IPL season (as per the dataset).
+* The correlation lower matrix of the four "bowling variables", the bowling Average and the Strike Rate are highly positively correlated. All the other variables are somewhat negatively correlated with the number of wickets. However, each one of these variables measures a different quality of a bowler, even though they are correlated.
+* An overall measure of performance by using these correlated variables can be achieved using Principal Component Analysis technique.
+
+# Performing PCA to measure performance
+* Principal Component Analysis (PCA) is a nonparametric variable reduction technique well-suited for correlated data that can be effectively used in this context. One objective of principal component analysis is to collapse a set of correlated variables into fewer uncorrelated variables as linear combinations of the original variables.
+* PCA is particularly useful when data on a number of useful variables has been gathered, and it is probable that there is some redundancy in those variables. Here, redundancy is taken to mean that our cricket performance variables are correlated with one another because, in some unknown sense, they might be measuring similar player-performance attributes. PCA aims to reduce the observed variables down to a smaller number of principal components which account for most of the variation occurring in the originally observed variables. These can be utilized to provide summarized measures of performance.
+
+
+```{r, echo=FALSE}
+# Bartlett Test
+print("Batting Data-Bartlett Test:")
+print(cortest.bartlett(bat_cor, n=nrow(pca_batvar)))
+print("Bowling Data-Bartlett Test:")
+print(cortest.bartlett(ball_cor, n=nrow(pca_ballvar)))
+```
+
+## Interpretation of Bartlett test
+* The null hypothesis is that the data dimension reduction is not possible. If p-value is less than 0.05, dimension reduction is possible.
+* As the p-value is less than 0.05 for both the batting and bowling variables which tells that the variables are correlated with each other and PCA can be used to perform dimension reduction.
+
+
+```{r, echo=FALSE}
+bat_e <- eigen(bat_cor)
+bat_vectors <- bat_e$vectors
+bat_values <- bat_e$values
+bat_D <- diag(bat_values)
+
+ball_e <- eigen(ball_cor)
+ball_vectors <- ball_e$vectors
+ball_values <- ball_e$values
+ball_D <- diag(ball_values)
+bat_colnames = c("PC1","PC2","PC3","PC4","PC5","PC6")
+ball_colnames = c("PC1","PC2","PC3","PC4")
+```
+
+# Ranking Batsmen using the Principal Components
+```{r, echo=FALSE}
+print("Correlation Matrix for 90 Batsmen")
+cor(pca_batvar)
+```
+
+## Interpretation of correlation matrix
+* Correlation matrix associated with the batting vectors may be examined for the correlation structure inherent in these variables.
+* Variables are measured on very different scales, they must be standardized before PCA analysis. However, the process of finding the principal components by using the standardized variables is equivalent to finding principal components by using the correlation matrix.
+
+## Labeling PC's eingenvectors
+```{r, echo=FALSE}
+# Batting eigenvectors, eigenvalues
+options(digits = 3)
+colnames(bat_vectors)<-bat_colnames
+print(bat_vectors)
+print(bat_values)
+```
+
+## The values given above are the eigenvalues and eigenvectors of batting variables
+* Eigenvalues measure the magnitude of the vectors and eigenvectors represent the direction of the Principal Component
+* So the PC1 will point in the direction, eigenvector of PC1, of highest variance to the extent given by the eigenvalue which is largest of all at 4.255
+
+```{r, echo=FALSE}
+# Bat pca loadings
+bat_loadings <- as.matrix(bat_vectors%*%sqrt(bat_D))
+colnames(bat_loadings)<-bat_colnames
+print(bat_loadings)
+```
+## Intrepretation of PCA loadings
+* The loadings are correlations between the principal components and the individual variables, the correlation between the PC1 and v1(Runs) is highest which tells that runs variable is given highest importance in PC1.
+
+
+
+```{r, echo=FALSE}
+# Batting Sree plot
+plot(bat_values, type = "both", xlab = "Principal Components", ylab = "Eigen values", main = "Sree Plot: Batting-Variance extracted")
+abline(h=1,lty=5)
+```
+
+
+
+```{r, echo=FALSE}
+# Batting: variance extracted by principal components
+bat_pca_var <- bat_values/length(bat_values)*100
+print(bat_pca_var)
+print(cumsum(bat_pca_var))
+```
+
+## Interpretation of Sree plot
+* Almost 71% of the Total Variability can be explained by this first principal component. Moreover, its corresponding eigenvalue 4.255 is the only one which is greater than 1.
+* Only PC which has eigenvalue greater than 1 is PC1 and so retaining only PC1 to rank the batsmen as the number of useful principal components is then taken to be the abscissa of the point beyond which all remaining eigenvalues add relatively small contributions to the total variability.
+* Scree plot is suggesting that since the elbow is at abscissa two, it is reasonable to use only the first principal component which explains 71% of the total variability.
+
+
+
+```{r, echo=FALSE}
+# Batting: Communality
+bat_comm <- bat_loadings**2
+print(bat_comm)
+```
+
+## Interpretatio of communalit table
+* The total variance extracted by all PC's for six variables given by the rows, and PC1 extracts maximum variance from all the variables and also PC1 has eigenvalue greater than one. So it is best to retain first Principal Component.
+* The first principal component can be referred as the general-batting-performance-index, which is a type of weighted average of all six variables used. Here, the coefficients of the first principal component are all positive, so larger values of principal component scores obtained indicate better player performance. This justifies that we should rank (largest to smallest) the players based on the first principal component.
+
+
+## Obtaining PCA scores
+```{r, echo=FALSE}
+# BAtting: PCA scores
+bat_varscale <- scale(pca_batvar)
+bat_score <- as.matrix(bat_varscale%*%-bat_vectors)
+round(cor(bat_score),2)
+head(bat_score)
+```
+
+## Interpreation
+* The correlation between each of the PC's is zero for scores extracted as expected given that PC's are orthogonal to 1st PC and describe maximum variance that remains after the variance explained by the first PC is removed.
+
+
+```{r, echo=FALSE}
+# Batting: correlation between scaled variables and pca scores
+print(cor(bat_varscale, bat_score))
+```
+
+## Interpretation
+* The given values are the correlation between the batting data variables and Pc's scores which is same as the loadings. And loadings are correlations between the principal components and the individual variables
+
+## checking if Rotation is required
+```{r, echo=FALSE}
+bat_rotation <- principal(pca_batvar, nfactors = 6, rotate = "none")
+fa.diagram(bat_rotation)
+```
+
+## Loadings after varimax rotation
+```{r, echo=FALSE}
+bat_rotated <- principal(pca_batvar, nfactors = 6, rotate = "varimax")
+fa.diagram(bat_rotated)
+```
+
+## Conclusion for requirement of rotation
+* Before performing any rotation the latent factors all load into a single PC1 which is also confirmed by results obtained by using Scree plot. After rotation factor loading has increased into five factors, as the purpose for performing PCA is to reduce the dimension the rotation doesn't help in achieving that purpose.
+* Hence, after looking at the loadings before and after rotation it is concluded that roation is not required.
+
+## Ranks of batsmen
+```{r, echo=FALSE}
+batsmen_ranked <- cbind(pca_bat, bat_score[,1])
+colnames(batsmen_ranked) <- c("Name","Runs","Ave","SR","Fours","Sixes","HF","PC1 Score")
+```
+
+
+```{r, echo=FALSE}
+sorted_bat <- batsmen_ranked[order(batsmen_ranked$`PC1 Score`, decreasing = TRUE),]
+head(sorted_bat, 10)
+```
+
+# Converted to two columns-list for reporting list of ranked Bowlers
+```{r, echo=FALSE}
+batsmen_rank_list <- cbind(as.data.frame(sorted_bat$Name), seq(1,nrow(sorted_bat)), sorted_bat$`PC1 Score`)
+#sorted_ball$Name
+colnames(batsmen_rank_list) <- c("Batsman Name","Rank","PC1 Score")
+two_col_batsmen_rank_list <- cbind(batsmen_rank_list[1:45,], batsmen_rank_list[46:90,])
+head(two_col_batsmen_rank_list, 10)
+#write.csv(two_col_batsmen_rank_list, file = "Batsmen ranked list.csv", sep = ",", row.names = FALSE)
+```
+
+
+# Ranking Bowlers using the Principal Components
+```{r, echo=FALSE}
+print("Correlation Matrix for 83 Bowlers")
+cor(pca_ballvar)
+```
+
+## Intrepretation of correlation matrix
+* Correlation matrix associated with the bowling vectors may be examined for the correlation structure inherent in these variables.
+* Variables are measured on very different scales, they must be standardized before PCA analysis. However, the process of finding the principal components by using the standardized variables is equivalent to finding principal components by using the correlation matrix.
+
+## Labeling PC's vectors
+```{r, echo=FALSE}
+# Balling eigenvectors, eigenvalues
+colnames(ball_vectors)<-ball_colnames
+print(ball_vectors)
+print(ball_values)
+```
+
+## The values given above are the eigenvalues and eigenvectors of batting variables
+* Eigenvalues measure the magnitude of the vectors and eigenvectors represent the direction of the Principal Component
+* So the PC1 will point in the direction, eigenvector of PC1, of highest variance to the extent given by the eigenvalue which is largest of all at 2.616
+* The vector values of PC1 except for first vector point which presents wickets is negative, because the bowler performance measured as good performance for higher numbers of wickets and lower values for Average(Ave), Economy(Econ) and Strike Rate(SR) 
+
+## Obtaining PCA loadings
+```{r, echo=FALSE}
+# Ball pca loadings
+ball_loadings <- as.matrix(ball_vectors%*%sqrt(ball_D))
+colnames(ball_loadings)<-ball_colnames
+print(ball_loadings)
+```
+
+## Intrepretaion of PCA loadings
+* The loadings are correlations between the principal components and the individual variables, the correlation between the PC1 and v1(Runs) is highest which tells that runs variable is given highest importance in PC1.
+
+
+
+```{r, echo=FALSE}
+# Balling Sree plot
+plot(ball_values, type = "both", xlab = "Principal Components", ylab = "Eigenvalues", main = "Sreee Plot: Balling-Variance extracted")
+abline(h=1, lty=5)
+```
+
+
+
+```{r, echo=FALSE}
+# Bowling: variance extracted by principal components
+ball_pca_var <- ball_values/length(ball_values)*100
+print(ball_pca_var)
+print(cumsum(ball_pca_var))
+```
+
+## Interpretation of Sree plot
+* Almost 65.4% of the Total Variability can be explained by this first principal component. Moreover, its corresponding eigenvalue 2.616 is the only one which is greater than 1.
+* Only PC which has eigenvalue greater than 1 is PC1 and so retaining only PC1 to rank the batsmen as the number of useful principal components is then taken to be the abscissa of the point beyond which all remaining eigenvalues add relatively small contributions to the total variability.
+* Scree plot is suggesting that since the elbow is at abscissa two, it is reasonable to use only the first principal component which explains 65.4% of the total variability.
+
+
+## obtaining commulities
+```{r, echo=FALSE}
+# Bowling: Communality
+ball_comm <- ball_loadings**2
+print(ball_comm)
+```
+
+## Interpretation of communality table
+* The total variance extracted by all PC's for four variables given by the rows, and PC1 extracts maximum variance from all the variables, expect variable 3 for which maximum variance is extracted by PC2 and also PC1 has eigenvalue greater than one. So it is best to retain only first Principal Component.
+
+
+```{r, echo=FALSE}
+# Bowling: PCA scores
+ball_varscale <- scale(pca_ballvar)
+ball_score <- as.matrix(ball_varscale%*%ball_vectors)
+round(cor(ball_score),2)
+head(ball_score)
+```
+
+## Interpreation
+* The correlation between each of the PC's is zero for scores extracted as expected given that PC's are orthogonal to 1st PC and describe maximum variance that remains after the variance explained by the first PC is removed.
+* Since PC1 score is a representation of maximum variance of the four variables, it is reasonable to use the first principle component for ranking. In this context, PC1 score can reasonably be described as the bowling performance index.
+
+```{r, echo=FALSE}
+# Bowling: Correlation between scaled variables and pca scores
+print(cor(ball_varscale, ball_score))
+```
+
+## Interpretation
+* The given values are the correlation between the balling data variables and Pc's scores which is same the loadings. And loadings are correlations between the principal components and the individual variables
+
+## checking if Rotation is required
+```{r}
+ball_rotation <- principal(pca_ballvar, nfactors = 4, rotate = "none")
+fa.diagram(ball_rotation)
+```
+
+## Loadings after varimax rotation
+```{r}
+ball_rotated <- principal(pca_ballvar, nfactors = 4, rotate = "varimax")
+fa.diagram(ball_rotated)
+```
+
+## Conclusion for requirement of rotation
+* Before performing any rotation the three factors load into PC1 and one into PC2 which is also confirmed by results obtained by using Scree plot. But after performing rotation loadings has increased into three factors with perfect loading of 1 which tells that it is overloading into those factors, as the purpose for performing PCA is to reduce the dimension the rotation doesn't help in achieving that purpose.
+* Hence, after looking at the loadings before and after rotation it is concluded that roation is not required.
+
+## Ranks of Bowlers
+### With attached PC1 scores
+```{r, echo=FALSE}
+bowlers_ranked <- cbind(pca_ball, ball_score[,1])
+colnames(bowlers_ranked) <- c("Name","Wkts","Ave","Econ","SR","PC1 Score")
+head(bowlers_ranked)
+```
+
+## Sorted as per PC1 Score
+```{r, echo=FALSE}
+sorted_ball <- bowlers_ranked[order(bowlers_ranked$`PC1 Score`, decreasing = TRUE),]
+print("Sorted list as per PC1 Scores")
+head(sorted_ball)
+```
+
+# Converted to two columns-list for reporting list of ranked Bowlers
+```{r}
+bowlers_rank_list <- cbind(as.data.frame(sorted_ball$Name), seq(1,nrow(sorted_ball)), sorted_ball$`PC1 Score`)
+#sorted_ball$Name
+colnames(bowlers_rank_list) <- c("Bowler Name","Rank","PC1 Score")
+bowlers_rank_list <- rbind(bowlers_rank_list, c("James Peter", 84, 7.35))
+two_col_bowler_rank_list <- cbind(bowlers_rank_list[1:42,], bowlers_rank_list[43:84,])
+head(two_col_bowler_rank_list, 10)
+#write.csv(two_col_bowler_rank_list, file = "Bowlers ranked list.csv", sep = ",", row.names = FALSE)
+```
+
+# Conclusion of Principal Component Analysis
+* IPL involves buying players based on the previous performance. There are several indicators to measure the player's performance which make a player a better performer than the rest. However, as this indicators are generally highly correlated with one another, makes it difficult to judge overall player performance.
+* So, using principal component analysis the reduced indicators can be used for ranking the players; which can be applied to correlated indicators for measuring performance. Thus, allowing to select players with reduced uncertainty about their potential due to inability to measure players based on the correlated indicators.
+
+
+# Factor Analysis
+```{r, include=FALSE}
+mbacar <- read.csv("MBAcar_Datafile.csv",header = TRUE)
+str(mbacar)
+head(mbacar)
+mcvar <- mbacar[,3:19]
+str(mcvar)
+head(mcvar)
+car <- mbacar[,"Car"]
+car
+```
+
+# Test of Assumptions:
+* Atleast sizable Inter-item correlation
+* Proportion of variance among variables that might be common variance
+
+## Inter-item correlations (correlation matrix)
+* Are there atleast several sizable correlations, e.g. > 0.5
+```{r, echo=FALSE}
+mcvar_cor <- as.data.frame(cor(mcvar))
+print(round(mcvar_cor[,1:9], 2))
+```
+```{r, echo=FALSE}
+print(round(mcvar_cor[,9:17], 2))
+```
+## Interpretaion of correlation matrix:
+* The matrix results gives there are sizable variables which have correlated and could be grouped under factors
+
+
+# Assessing the Factorability(structure detection) of the Data
+* Evalutation to check whether the "factorability" of the data. Are there meaningful latent factors to be found within the data?
+* We can check two things: 
+(1) Bartlett's test of sphericity
+(2) the Kaiser-Meyer-Olkin measure of sampling adequacy.
+
+## Bartlett's Test of Sphericity
+```{r, echo=FALSE}
+cortest.bartlett(mcvar_cor, n=nrow(mcvar))
+```
+
+## Intrepreation of Bartlett's Test of Sphericity:
+* Bartlett's Test of Sphericity evaluates whether or not the variables intercorrelate at all, by evaluating the observed correlation matrix against an "identity matrix" (a matrix with ones along the principal diagonal, and zeroes everywhere else). If this test is not statistically significant, we should not employ a factor analysis.
+* Bartlett's test was statistically significant, suggesting that the observed correlation matrix among the items is
+not an identity matrix. This really isn't a particularly powerful indication that we have a factorable dataset,
+though - all it really tells us that at least some of the variables are correlated with each other.
+
+## Kaiser-Meyer-Olkin(KMO)
+```{r, echo=FALSE}
+KMO(mcvar_cor)
+```
+## Intrepreation of KMO:
+* The Kaiser-Meyer-Olkin (KMO) measure of sampling adequacy is a better measure of factorability. The KMO tests to see if the partial correlations within your data are close enough to zero to suggest that there is at least one latent factor underlying the variables. The minimum acceptable value is 0.50, if the overall MSA is too low, we could look at the item MSA's and drop items that are too low.
+* The overall KMO for our data is 0.88 which is excellent - this suggests that we can go ahead with our planned factor analysis.
+
+# Determining the Number of Factors to Extract
+* The decision as to the number of factors that we will need to extract, in order to achieve the most parsimonious (but still interpretatable) factor structure. Parsimonious models are simple models with great explanatory predictive power. They explain data with a minimum number of parameters, or predictor variables. Parsimonious models have optimal parsimony, or just the right amount of predictors needed to explain the model well.There is generally a tradeoff between goodness of fit and parsimony: low parsimony models (i.e. models with many parameters) tend to have a better fit than high parsimony models. This is not usually a good thing; adding more parameters usually results in a good model fit for the data at hand, but that same model will likely be useless for predicting new data sets.
+* The two most commonly employed methods are the scree plot, and parallel analysis which helps to determine number of factors to extract. For this data using scree plot to determine the factors.
+
+## Sree Plot
+* Eigenvalues are a measure of the amount of variance accounted for by a factor, and so they can be useful in determining the number of factors that we need to extract. In a scree plot, we simply plot the eigenvalues for all of our factors, and then look to see where they drop off sharply.
+
+```{r, echo=FALSE}
+# Sree plot
+scree(mcvar)
+```
+
+## Interpretation of Scree plot:
+* The scree plot technique involves drawing a straight line through the plotted eigenvalues, starting with the largest one. The last point to fall on this line represents the last factor that we extract, with the idea being that beyond this, the amount of additional variance explained is non-meaningful. Regardless of whether we are using a principal components or a principal axis factor extraction, however, there is a very large first factor in this data.
+* If we were to draw our straight line starting at this point, would probably conclude that there are only four factors in the dataset.
+
+# Conducting the Factor Analysis using 4 factors:
+* Having a good idea as to how many factors (4) that we should extract in our analysis of the MBA car data. A decision whether to use "Principal Axis Factoring", or "principal components" analysis. In a very broad sense, "principal axis factoring" is used when we want to identify the latent variables that are underlying a set of variables, while "principal components" analysis is used to reduce a set of variables to a smaller set of factors (i.e., the "principal components" of the data). In other words, Principal Axis Factoring is used when we want to evaluate a theoretical model with a set of variables, and principal components analysis is used for data reduction.
+* The primary difference between the way that principal axis factoring and principal component analysis are conducted, is that the correlation matrix on which the factor analysis is based has ones along the principal diagonal in principal components analysis, and the communalities along the principal diagonal in principal axis factor analysis.
+
+## Factor analysis using Principal Components Analysis
+### Factor loadings using PCA method
+
+```{r, echo=FALSE}
+pc4.out <- principal(mcvar, nfactors = 4, rotate = "none")
+print(pc4.out)
+```
+```{r, echo=FALSE}
+plot(pc4.out$values, type = "both", xlab = "Principal component", ylab = 'Eigenvalues', main = "Sree Plot")
+abline(h=1, lty=5)
+```
+### The Sree Plot given using the eigen value usin principal method confirms the earlier results given by using Scree function on the data.
+
+## Look of the factor structure for this solution
+```{r}
+fa.diagram(pc4.out)
+```
+
+## Interpretation of 4 factor solution
+As it seen factor structure using the four factor solution results, remaining factors doesn't have any loadings, fourth factor that has major loadings from only one item.
+
+
+# Variance extracted by factors
+```{r}
+print("Printed only first five")
+print("-----Principal factors Eigne values-----")
+print(pc4.out$values[1:5])
+
+print("-----Total Variance explained by factors-----")
+print(cumsum(100*(pc4.out$values[1:5]/length(pc4.out$values))))
+```
+## Observation
+* 1) Output of this analysis show us that only 4 components have eigenvalues greater than 1, suggesting that we extract 4 components.
+2) The above output also suggests that extracting 4 components explains 74.2% of the total variance.
+
+## Communalities
+```{r, echo=FALSE}
+print(pc4.out$communality)
+```
+### These are the percentage of variance that can be explained by the retained factors for each variable.
+
+
+
+# Factor Analysis using the Principal Axis Factoring
+```{r, echo=FALSE}
+fa4.out <- fa(mcvar, nfactors = 4, fm="pa", max.iter = 200, rotate = "none")
+fa.diagram(fa4.out)
+```
+### observation
+* The difference between PCA factor analysis and Pricipal Factors axis is the variable for PC2 has changed from two variables i.e. comfortable and practical from 0.7 to 0.6 respectively and for PC4 it has change from maximum loading of 1 to 0. The fourth factor can be treated as over loading has it has only one variable loading on it which was given by PCA method, this probably represents an overextraction.
+
+# Factor rotation
+* Rotation is a way of maximizing high loadings and minimizing low loadings so that the simplest possible structure is achieved.
+* The most common orthogonal rotation method varimax
+
+```{r}
+fa4.out <- fa(mcvar, nfactors = 4, fm="pa", max.iter = 200, rotate = "varimax")
+print(fa4.out)
+
+```
+
+```{r}
+fa.diagram(fa4.out)
+```
+### Observation and Labeling of factors
+* The rotated solution is more interpretable - in fact, it seems to replicate the expected factor structure nicely. And agrees with number of factors given by the scree plot.
+* Factor 1 - Youth
+  * The variables like fun, exciting, etc. are more applicable to younger people who are more attracted to a car which is given     PA1 loadings, hence labeling the factor as youth describes well the underlying latent factors.
+* Factor 2 - Professional
+  * The variables like dependable, comfortable, etc. are more applicable to professional people who prefer a car which can         serve them well and keep up the strict business schedules which is given PA2 loadings, hence labeling the factor as            professional describes well the underlying latent factors.
+* Factor 3 - Travelling
+  * The variables like rugged, outdoorsy are more applicable to people who like to travel and prefer a car which can perform       well on uneven road and rough conditions is given by PA3 loadings, hence labeling the factor as Travelling describes well      the underlying latent factors.
+* Factor 4 - Family
+  * The variables like practical, family, etc. are more applicable for family who a car which is can be used on daily basis and     is practical given by PA4 loadings, hence labeling the factor as family describes well the underlying latent factors.
+
+## Communalities
+The communality for each variable is the percentage of variance that can be explained by the retained factors given by the rotated solution. It's best if the retained factors explain more of the variance in each variable.
+
+```{r, echo=FALSE}
+fa4.out$communality
+```
+
+## Eigenvalues
+```{r, echo=FALSE}
+fa4.out$e.values[1:5]
+fa4.out$value[1:5]
+
+```
+### The first eigenvalues derived in the extracted factor solution are stored within e.values. These are the eigenvalues
+that were plotted in the scree plots that plotted at the beginning of this factor analysis. The second line is the eigenvalues from the rotated solution
+
+## Percentage of Variance accounted for
+
+```{r, echo=FALSE}
+print("-----Plotted in the scree plot at beginning-----")
+100*fa4.out$e.values[1:5]/length(fa4.out$e.values)
+print("-----By the rotated solution")
+100*fa4.out$values[1:5]/length(fa4.out$values)
+```
+
+```{r, echo=FALSE}
+print("-----Plotted in the scree plot at beginning-----")
+cumsum(100*fa4.out$e.values[1:5]/length(fa4.out$e.values))
+print("-----By the rotated solution")
+cumsum(100*fa4.out$values[1:5]/length(fa4.out$values))
+```
+
+# Factor loadings
+* After viewing the highest-loading items for each factor using fa.diagram, but this only tells us the largest loading for each item. Each item will, however, load on each of the factors to a greater or lesser degree - and we will eventually want to look at the full factor loading matrix. The factor loading matrix shows us the factor loadings for each variable, after they have been rotated to "simple structure." Essentially, we are taking advantage of the fact that there are a number of factor solutions that are equally acceptable to the "optimal" solution that was found within our initial extraction (i.e., that are mathematically equivalent), and rotating the factors so that they are more easily interpreted.
+
+```{r, echo=FALSE}
+print("Full factor loading matrix")
+print(fa4.out$loadings, cutoff = 0, digits = 3)
+```
+## Observation
+* The varimax rotation was rather successful in finding a rotation that simplified the complexity of the variables. As each of the variables now load highly on the single factor while the remaining three factors have less loading for a particular variable in a row. Like for the exiting variable first factor has highest loading of 85% and the remaining factors have significant less loadings for that variable. Except for the luxurious variable which loads evenly close loads into factor one and factor two and the discipline which has every less percentage of loadings to all the factor, which can treated as not a strong latent factor.
+
+## Summary of Factor scores of 4 factors
+```{r, echo=FALSE}
+summary(fa4.out$scores)
+
+```
+
+## Observation
+* The factor scores are the weights of each observed variable in producing a score representing the factor, whereas the factor loadings are the weight of each factor on the observed variables.
+* The factor loadings are used to interpret what the factor is by judging the relative sizes of the loadings; high loadings suggest stronger factor contributions to those variables. And factor scores on the other hand are composites of the variables that are used to make the latent factor into an observed variable.
+* Factor socres are used when  the factor was of interest to use as a predictor or outcome in a regression analysis and were not planning to use latent variable modeling methods.
+* The factor score computation given by fa() method result in factor scores with mean = 0 and SD = 1.
+
+```{r}
+pc.cr <- princomp(mbacar[,2:19], cor=TRUE)
+biplot(pc.cr, expand=11, xlim=c(-1.5, 1), ylim=c(-1, 1))
+#biplot(pc.cr, expand=17, xlim=c(-2, 1.5), ylim=c(-1, 2))
+car_scores <- cbind(as.data.frame(car),fa4.out$scores)
+
+```
+```{r}
+biplot(fa4.out)
+biplot
+```
+```{r}
+car1 <- car_scores[car_scores["car"]==1,c("PA1","PA2","PA3","PA4")]
+car2 <- car_scores[car_scores["car"]==2,c("PA1","PA2","PA3","PA4")]
+car3 <- car_scores[car_scores["car"]==3,c("PA1","PA2","PA3","PA4")]
+car4 <- car_scores[car_scores["car"]==4,c("PA1","PA2","PA3","PA4")]
+car5 <- car_scores[car_scores["car"]==5,c("PA1","PA2","PA3","PA4")]
+car6 <- car_scores[car_scores["car"]==6,c("PA1","PA2","PA3","PA4")]
+car7 <- car_scores[car_scores["car"]==7,c("PA1","PA2","PA3","PA4")]
+car8 <- car_scores[car_scores["car"]==8,c("PA1","PA2","PA3","PA4")]
+car9 <- car_scores[car_scores["car"]==9,c("PA1","PA2","PA3","PA4")]
+car10 <- car_scores[car_scores["car"]==10,c("PA1","PA2","PA3","PA4")]
+car1_mean_scores <- c(0.552, -0.190, -0.560, -0.403)
+car2_mean_scores <- c(-0.135, -0.051, 1.468, 0.336)
+car3_mean_scores <- c(-0.054, 0.227, -0.703, -0.164)
+car4_mean_scores <- c(0.075, -0.459, 1.298, 0.583)
+car5_mean_scores <- c(0.148, 0.678, -0.677, -0.220)
+car6_mean_scores <- c(-1.635, -0.465, -0.245, 0.398)
+car7_mean_scores <- c(0.390, 0.890, -0.439, 0.005)
+car8_mean_scores <- c(0.317, -0.299, -0.106, -0.036)
+car9_mean_scores <- c(1.26, -0.880, 0.161, -1.110)
+car10_mean_scores <- c(-0.880, 0.512, -0.153, 0.605)
+summary(car10)
+```
+```{r}
+par1 <- par(mfrow=c(3,3))
+plot(car1_mean_scores, car2_mean_scores, col=c("red"))
+plot(car1_mean_scores, car3_mean_scores, col=c("red"))
+plot(car1_mean_scores, car4_mean_scores, col=c("red"))
+plot(car1_mean_scores, car5_mean_scores, col=c("red"))
+plot(car1_mean_scores, car6_mean_scores, col=c("red"))
+plot(car1_mean_scores, car7_mean_scores, col=c("red"))
+plot(car1_mean_scores, car8_mean_scores, col=c("red"))
+plot(car1_mean_scores, car9_mean_scores, col=c("red"))
+plot(car1_mean_scores, car10_mean_scores, col=c("red"))
+```
+
+```{r}
+par2 <- par(mfrow=c(2,4))
+plot(car2_mean_scores, car3_mean_scores, col=c("red"))
+plot(car2_mean_scores, car4_mean_scores, col=c("red"))
+plot(car2_mean_scores, car5_mean_scores, col=c("red"))
+plot(car2_mean_scores, car6_mean_scores, col=c("red"))
+plot(car2_mean_scores, car7_mean_scores, col=c("red"))
+plot(car2_mean_scores, car8_mean_scores, col=c("red"))
+plot(car2_mean_scores, car9_mean_scores, col=c("red"))
+plot(car2_mean_scores, car10_mean_scores, col=c("red"))
+```
+
+```{r}
+par3 <- par(mfrow=c(2,4))
+plot(car3_mean_scores, car4_mean_scores, col=c("red"))
+plot(car3_mean_scores, car5_mean_scores, col=c("red"))
+plot(car3_mean_scores, car6_mean_scores, col=c("red"))
+plot(car3_mean_scores, car7_mean_scores, col=c("red"))
+plot(car3_mean_scores, car8_mean_scores, col=c("red"))
+plot(car3_mean_scores, car9_mean_scores, col=c("red"))
+plot(car3_mean_scores, car10_mean_scores, col=c("red"))
+```
+
+```{r}
+par3 <- par(mfrow=c(2,3))
+plot(car4_mean_scores, car5_mean_scores, col=c("red"))
+plot(car4_mean_scores, car6_mean_scores, col=c("red"))
+plot(car4_mean_scores, car7_mean_scores, col=c("red"))
+plot(car4_mean_scores, car8_mean_scores, col=c("red"))
+plot(car4_mean_scores, car9_mean_scores, col=c("red"))
+plot(car4_mean_scores, car10_mean_scores, col=c("red"))
+
+```
+
+```{r}
+par3 <- par(mfrow=c(2,3))
+plot(car5_mean_scores, car6_mean_scores, col=c("red"))
+plot(car5_mean_scores, car7_mean_scores, col=c("red"))
+plot(car5_mean_scores, car8_mean_scores, col=c("red"))
+plot(car5_mean_scores, car9_mean_scores, col=c("red"))
+plot(car5_mean_scores, car10_mean_scores, col=c("red"))
+```
+```{r}
+par3 <- par(mfrow=c(2,2))
+plot(car6_mean_scores, car7_mean_scores, col=c("red"))
+plot(car6_mean_scores, car8_mean_scores, col=c("red"))
+plot(car6_mean_scores, car9_mean_scores, col=c("red"))
+plot(car6_mean_scores, car10_mean_scores, col=c("red"))
+```
+
+```{r}
+par3 <- par(mfrow=c(2,2))
+plot(car7_mean_scores, car8_mean_scores, col=c("red"))
+plot(car7_mean_scores, car9_mean_scores, col=c("red"))
+plot(car7_mean_scores, car10_mean_scores, col=c("red"))
+```
+
+```{r}
+par3 <- par(mfrow=c(1,2))
+plot(car8_mean_scores, car9_mean_scores, col=c("red"))
+plot(car8_mean_scores, car10_mean_scores, col=c("red"))
+```
+
+```{r}
+plot(car9_mean_scores, car10_mean_scores, col=c("red"))
+```
+

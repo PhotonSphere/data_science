@@ -1,0 +1,1303 @@
+---
+output:
+  pdf_document:
+      latex_engine: xelatex
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, comment = "")
+```
+
+
+```{r title, echo=FALSE, fig.cap="", out.width = '100%', fig.align='center'}
+knitr::include_graphics("title3.png")
+```
+
+
+
+```{r pressure, include=FALSE, fig.cap="", out.width = '100%', fig.align='center'}
+knitr::include_graphics("unicorn.jpeg")
+```
+
+
+
+```{r author, echo=FALSE, fig.cap="", out.width = '100%', fig.align='center'}
+knitr::include_graphics("author.png")
+```
+
+
+
+_________________________________________________________________________________________________________________ 
+
+
+```{r, results='asis', eval=(knitr::opts_knit$get('rmarkdown.pandoc.to') == 'latex')}
+cat('\\pagebreak')
+```
+
+```{r toc, echo=FALSE, fig.cap="", out.width = '100%', fig.align='center'}
+knitr::include_graphics("toc.png")
+```
+
+#Contents
+####1. Project Objective.....................................................................................................................3    
+####2. Data Exploration......................................................................................................................3
+#####+ 2.1. Data description
+#####+ 2.2. Data Summary
+####3. Exploratory Data Analysis............................................................................................................7
+#####+ 3.1 Unbalanced data Analysis
+####4. Splitting the data...................................................................................................................14
+#####+ 4.1. Splitting the data into training and holdout sample
+#####+ 4.2 Generate Balanced data: Over sampling the positive class
+####5. CART Model...........................................................................................................................20
+#####+ 5.1 Scoring the CART model
+#####+ 5.2 Scoring Holdout sample
+####6. Random Forest Model..................................................................................................................26
+#####+ 6.1 Measuring the model performance
+#####+ 6.2 Scoring Holdout sample
+####7. Neural Network Model.................................................................................................................32
+#####+ 7.1 Neural Network model variables inclusion
+#####+ 7.2 Model Training using the scaled data
+#####+ 7.3 Scoring the holdout sample
+#####+ 7.4 Training the model using balanced data(over sampling method)
+#####+ 7.5 Performing PCA for the training dataset
+#####+ 7.6 Training the neural network model with PCA variables
+####8. Ensemble Model.......................................................................................................................41
+#####+ 8.1 Majority voting
+#####+ 8.2 Averaging
+#####+ 8.3 Weighted Average
+#####+ 8.4 Scoring the ensemble results
+####9. Project Conclusion...................................................................................................................45
+
+
+```{r, results='asis', eval=(knitr::opts_knit$get('rmarkdown.pandoc.to') == 'latex')}
+cat('\\pagebreak')
+```
+
+
+```{r, include=FALSE, results='asis', eval=(knitr::opts_knit$get('rmarkdown.pandoc.to') == 'latex')}
+cat('\\centerline{Table of Contents}')
+```
+
+
+```{r, include=FALSE}
+library(ggplot2)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(RColorBrewer)
+library(data.table)
+library(scales)
+library(ROCR)
+library(ineq)
+library(dplyr)
+library(ROSE)
+library(caret)
+```
+
+
+# 1. Project Objective
+
+* The objective is to build a classification model which accurately discriminates the customers who will respond to personal loan offers from the non-responders. The classification will be tried using three different models CART, Random Forest, Neural Network. Based on their performance both on the validation scores and holdout data one of them will be choosen as best discrimination model.
+* Along with finding a best single model which can be intrepreted to find the most influential variables, for achieving higher accurary an ensemble model is build which will allow to make accurate predictions by combining the strengths of the three modelS albeit it results in a less interpretable model.
+
+# 2. Data Exploration
+
+```{r, include=FALSE}
+setwd("C:/Users/Mease/Desktop/Machine_Learning/GL_BACP/Module IV/Resources")
+loan_d <- read.csv('PL_XSELL (2).csv', header = TRUE)
+head(loan_d)
+```
+
+### Check for presence of missing values
+```{r}
+colSums(is.na(loan_d))
+```
+
+#### Observation:
+* The data doesn't contain any missing values, often the data has missing values which needs to be preprocessed before carrying out analysis and model training based on the type of model that is being conisdered suitable for the analsis.
+
+
+## 2.1. Data description 
+```{r}
+#loan_d$TARGET <- as.factor(loan_d$TARGET)
+str(loan_d)
+```
+
+## 2.2. Data Summary
+
+```{r}
+summary(loan_d[,-c(1,7,11,40)])
+```
+
+#### Observation:
+* Summary of the data provides an easy way to get quick insights about the data, like the male observation is 3 times more than the females, the net transaction have higher initial amount value per transaction compared to other transaction as expected. The observations for savings account is more compared to current account. Based on thse the influence of the variables can be estimated while building the model, and help understand the results from the model with more clarity.
+
+```{r, results='asis', eval=(knitr::opts_knit$get('rmarkdown.pandoc.to') == 'latex')}
+cat('\\pagebreak')
+```
+
+# 3. Exploratory Data Analysis
+
+### Count plots to visualize ratio of responders for an attribute
+
+```{r}
+loan_g <- loan_d
+ggplot(loan_d, aes(TARGET, ..count..)) + geom_bar(aes(fill=GENDER)) + labs(title='Target count plot in terms of Gender')
+
+```
+
+#### Observation:
+* The representation for other category is relatively every less and observation for male forms the larger portion of the data.
+
+
+```{r}
+ggplot(loan_d, aes(TARGET, ..count..)) + geom_bar(aes(fill=AGE_BKT)) + labs(title='Target count plot in terms of Age Braket')
+
+```
+
+#### Observation:
+* The ratio for age bracket in positive class and negative class are very similar which might not be a differentiator variable, if few age bracket had larger count in the positive class it would have been good to use that age bracket to have more influence, here there doesn't seem to be any particular difference in either of the classes. And given the dataset already has age variable, age braket may not add any more predictive power for the model.
+
+```{r}
+ggplot(loan_d, aes(TARGET, ..count..)) + geom_bar(aes(fill=OCCUPATION)) + labs(title='Target count plot in terms of Occupation')
+
+```
+
+#### Observation:
+* Occupation has a little difference between the positive and negative class, especially the self-employed has more count in the postive class, this would be a good predictor variable.
+
+
+```{r}
+ggplot(loan_d, aes(TARGET, ..count..)) + geom_bar(aes(fill=ACC_TYPE)) + labs(title='Target count plot in terms of Account Type')
+
+```
+
+#### Observation:
+* The count seems to have similar ratio between positive and negative class.
+
+```{r}
+loan_g$FLG_HAS_OLD_LOAN <- as.factor(loan_g$FLG_HAS_OLD_LOAN)
+ggplot(loan_g, aes(TARGET, ..count..)) + geom_bar(aes(fill=FLG_HAS_OLD_LOAN)) + labs(title='Target count plot in terms of Old Loan')
+
+```
+
+#### Observation:
+* Since the intention to build models to predict who will respond postively old loan history will be a good predictor in conjuntion with SCR scores those with lower SCR scores and have not vailed loans can be excluded and those who have availed loand and have lower SCR scores should not be included to reduce the risk.
+
+
+```{r}
+framed <- par(mfrow=c(2,2),bg=("cornsilk2"))
+par(mar=c(2,4.5,4.5,.1)+0.1)
+hist(loan_d$BALANCE, xlab = "", ylab = "", col = c("steelblue1"), main = "Balance")
+mtext("                                            Histograms", side = 3, line = 3, cex = 1.3, font = 1)
+mtext("Frequency                              ", side = 2, line = 3, cex = 1.5, font = 1)
+hist(loan_d$HOLDING_PERIOD, xlab = "", ylab = "", col = c("steelblue1"), main = "Holding Period")
+#mtext("Histogram of Runs, Ave, SR, Fours, Sixes, HF", side = 3, line = 3, cex = 1.3, font = 1)
+hist(loan_d$SCR, xlab = "", ylab = "", col = c("steelblue1"), main = "SCR")
+#hist(pca_batvar$Fours, xlab = "", ylab = "", col = c("steelblue1"), main = "Fours")
+#mtext("Frequency", side = 2, line = 3, cex = 1.2, font = 1)
+#hist(pca_batvar$Sixes, xlab = "", ylab = "", col = c("steelblue1"), main = "Sixes")
+#hist(pca_batvar$HF, xlab = "", ylab = "", col = c("steelblue1"), main = "HF")
+```
+
+#### Observation:
+* Holdin period has flat distribution, SCR has more towards lower half below 450 these would the ones which needs to excluded even though if the model returns a positive response in some way due to error. And the balance variables has more count indicating more accounts usually have less balance levels, and targeting those with some balance level would be less risky as there would likely be paying after availing the loand, and those with higher balance may not have a need for a loan so targeting them would be somewhat less fruitful.
+
+
+## 3.1 Unbalanced data Analysis
+
+#### Unbalanced data:
+* The data with unbalanced observation would be less likely result in building a good model which can differentiate accurately between the positive and negative response class. In this regard sampling technique can be employed to make a data balanced.
+
+```{r}
+countDF <- loan_d %>% group_by(TARGET) %>% summarize(class_count = n())
+print(head(countDF))
+```
+
+#### Observation:
+* The data has overall 20000 observation out of which 17488 are negative class and only about 12% of the observation belong to positive class which would result in a model which would not differentiate the positive class accurately.
+
+### Count plot of response variable:
+```{r}
+loan_g$TARGET <- as.factor(loan_g$TARGET)
+ggplot(loan_g, aes(TARGET, ..count..)) + geom_bar(aes(fill=TARGET))
+```
+
+#### Observation:
+* The observation for negative class has a larger count.
+
+```{r}
+ggplot(loan_g, aes(x = TARGET)) +  
+        geom_bar(aes(fill=TARGET, y = (..count..)/sum(..count..))) + 
+        ylab('Percentage') +
+        labs(title="Response's percentage makeup") +
+        geom_text(aes(y = ((..count..)/sum(..count..)), label = scales::percent((..count..)/sum(..count..))), stat = "count", vjust = -0.25) +
+        theme(
+        axis.text.y=element_blank(), axis.ticks=element_blank(),
+        axis.title.y=element_blank()
+  ) +
+        ## version 3.0.9
+        # scale_y_continuous(labels = percent_format())
+        ## version 3.1.0
+        scale_y_continuous(labels=percent)
+```
+
+#### Observation:
+* The 12.6% of the postive class in the total observation will be problematic for building an accurate model.
+
+```{r, results='asis', eval=(knitr::opts_knit$get('rmarkdown.pandoc.to') == 'latex')}
+cat('\\pagebreak')
+```
+
+# 4. Splitting the data
+## 4.1. Splitting the data into training and holdout sample
+```{r}
+set.seed(1234)
+sample <- sample.int(n = nrow(loan_d), size = floor(.7*nrow(loan_d)), replace = F)
+train <- loan_d[sample, ]
+test  <- loan_d[-sample, ]
+cat('Dimension of total data:\n')
+cat(nrow(loan_d), ncol(loan_d),"\n\n")
+
+cat('Dimension of training data:\n')
+cat(nrow(train), ncol(test),"\n\n")
+
+cat('Dimension of test data:\n')
+cat(nrow(test), ncol(test))
+```
+
+```{r}
+ggplot(train, aes(TARGET, ..count..)) + geom_bar(aes(fill=TARGET)) +
+  labs(title="Response's count in train set")
+```
+
+```{r}
+ggplot(train, aes(x = TARGET)) +  
+        geom_bar(aes(fill=TARGET, y = (..count..)/sum(..count..))) + 
+        ylab('Percentage') +
+        labs(title="Response's percentage makeup train set") +
+        geom_text(aes(y = ((..count..)/sum(..count..)), label = scales::percent((..count..)/sum(..count..))), stat = "count", vjust = -0.25) +
+        theme(
+        axis.text.y=element_blank(), axis.ticks=element_blank(),
+        axis.title.y=element_blank()
+  ) +
+        ## version 3.0.9
+        # scale_y_continuous(labels = percent_format())
+        ## version 3.1.0
+        scale_y_continuous(labels=percent)
+```
+
+```{r}
+ggplot(test, aes(x = TARGET)) +  
+        geom_bar(aes(fill=TARGET, y = (..count..)/sum(..count..))) + 
+        ylab('Percentage') +
+        labs(title="Response's percentage makeup in test set") +
+        geom_text(aes(y = ((..count..)/sum(..count..)), label = scales::percent((..count..)/sum(..count..))), stat = "count", vjust = -0.25) +
+        theme(
+        axis.text.y=element_blank(), axis.ticks=element_blank(),
+        axis.title.y=element_blank()
+  ) +
+        ## version 3.0.9
+        # scale_y_continuous(labels = percent_format())
+        ## version 3.1.0
+        scale_y_continuous(labels=percent)
+```
+
+#### Observation:
+* Using the train set which has unbalanced dataset would not give a good classification model, hence using sampling technique to transform the data into acceptable ratio of positive class to negative class would allow to build a better model.
+
+
+## 4.2 Generate Balanced data: Over sampling the positive class
+```{r, echo=TRUE}
+cat('Response before balancing the Target class\n', table(train$TARGET))
+train.balanced <- ovun.sample(TARGET~., data=train,
+                                p=0.3, 
+                                seed=1, method="over")$data
+
+```
+
+```{r}
+cat('\n\nResponse after balancing the Target class\n', table(train.balanced$TARGET))
+```
+
+```{r}
+train.b <- train.balanced
+train.b$TARGET <- as.factor(train.balanced$TARGET)
+ggplot(train.b, aes(x = TARGET)) +  
+        geom_bar(aes(fill=TARGET, y = (..count..)/sum(..count..))) + 
+        ylab('Percentage') +
+        labs(title="Response's percentage makeup after balancing train set") +
+        geom_text(aes(y = ((..count..)/sum(..count..)), label = scales::percent((..count..)/sum(..count..))), stat = "count", vjust = -0.25) +
+        theme(
+        axis.text.y=element_blank(), axis.ticks=element_blank(),
+        axis.title.y=element_blank()
+  ) +
+        ## version 3.0.9
+        # scale_y_continuous(labels = percent_format())
+        ## version 3.1.0
+        scale_y_continuous(labels=percent)
+```
+
+#### Observation:
+* The data has been transformed to make the positive(favourable) occur at 30% as previous 12.7% in the actual train dataset, now the balanced train dataset consist unfavourable:favourable response ratio to 70:30
+
+
+```{r}
+#View(train.balanced)
+train.balanced <- train.balanced[sample(nrow(train.balanced)),]
+rownames(train.balanced) <- 1:nrow(train.balanced)
+#View(train.balanced)
+```
+
+```{r, results='asis', eval=(knitr::opts_knit$get('rmarkdown.pandoc.to') == 'latex')}
+cat('\\pagebreak')
+```
+
+
+# 5. CART Model
+
+```{r, echo=TRUE}
+r.ctrl = rpart.control(minsplit=100, minbucket = 12, cp = 0, xval = 10)
+
+
+m1 <- rpart(formula = TARGET ~ ., 
+            data = train.balanced[,c(-1,-7,-11,-40)], method = "class", 
+            control = r.ctrl,
+            parms = list(split = 'information'))
+
+```
+
+#### Interpretation:
+* The minsplit has been set to perform split if the total observations are 100 or more and to the terminal node will have minimum of 12 observations.
+
+
+## Analyzing the model
+```{r, include=FALSE}
+#fancyRpartPlot(m1)
+printcp(m1)
+```
+
+```{r, include=FALSE}
+plotcp(m1)
+```
+
+### Pruning Tree
+```{r}
+ptree<- prune(m1, cp= 0.0008,"CP")
+printcp(ptree)
+#fancyRpartPlot(ptree, uniform=TRUE,  main="Pruned Classification Tree")
+```
+
+#### Interpretation:
+* The cp value to prune the tree was taken as 0.0008 after which reduction in the validation error is small, hence performing prune at 0.0008 was considered good.
+
+
+## 5.1 Scoring the classification tree
+```{r}
+cart.data <- train.balanced
+cart.data$predict.class <- predict(ptree, cart.data, type="class")
+cart.data$predict.score <- predict(ptree, cart.data, type="prob")
+#View(cart.data)
+```
+
+
+```{r}
+decile <- function(x){
+  deciles <- vector(length=10)
+  for (i in seq(0.1,1,.1)){
+    deciles[i*10] <- quantile(x, i, na.rm=T)
+  }
+  return (
+  ifelse(x<deciles[1], 1,
+  ifelse(x<deciles[2], 2,
+  ifelse(x<deciles[3], 3,
+  ifelse(x<deciles[4], 4,
+  ifelse(x<deciles[5], 5,
+  ifelse(x<deciles[6], 6,
+  ifelse(x<deciles[7], 7,
+  ifelse(x<deciles[8], 8,
+  ifelse(x<deciles[9], 9, 10
+  ))))))))))
+}
+
+```
+
+```{r}
+
+#class(train$predict.score)
+## deciling
+cart.data$deciles <- decile(cart.data$predict.score[,2])
+#View(CTDF.dev)
+
+## Ranking code
+##install.packages("data.table")
+##install.packages("scales")
+#library(data.table)
+#library(scales)
+tmp_DT = data.table(cart.data)
+rank <- tmp_DT[, list(
+  cnt = length(TARGET), 
+  cnt_resp = sum(as.numeric(as.character(TARGET))), 
+  cnt_non_resp = sum(as.numeric(as.character(TARGET)) == 0)) , 
+  by=deciles][order(-deciles)]
+rank$rrate <- round(rank$cnt_resp / rank$cnt,4);
+rank$cum_resp <- cumsum(rank$cnt_resp)
+rank$cum_non_resp <- cumsum(rank$cnt_non_resp)
+rank$cum_rel_resp <- round(rank$cum_resp / sum(rank$cnt_resp),4);
+rank$cum_rel_non_resp <- round(rank$cum_non_resp / sum(rank$cnt_non_resp),4);
+rank$ks <- abs(rank$cum_rel_resp - rank$cum_rel_non_resp) * 100;
+rank$rrate <- percent(rank$rrate)
+rank$cum_rel_resp <- percent(rank$cum_rel_resp)
+rank$cum_rel_non_resp <- percent(rank$cum_rel_non_resp)
+
+head(rank)
+```
+
+#### Interpretation:
+* The KS value of 66.73 is achieved from the cross validation score, a KS of above 40 is considered to be good and here 66.73 is very encouraging.
+
+```{r}
+score1 <- cart.data$predict.score[,2]
+Target <- cart.data$TARGET
+pred <- prediction(score1, Target)
+perf <- performance(pred, "tpr", "fpr")
+plot(perf)
+
+
+#View(rank)
+```
+
+```{r}
+KS <- max(attr(perf, 'y.values')[[1]]-attr(perf, 'x.values')[[1]])
+auc <- performance(pred,"auc"); 
+auc <- as.numeric(auc@y.values)
+
+gini = ineq(cart.data$predict.score[,2], type="Gini")
+
+with(cart.data, table(TARGET, predict.class))
+cat('\nAUC: ',auc, '\nKS: ',KS, '\nGini: ', gini)
+```
+
+#### Interpretation:
+* The tree measures are closely positive with KS of 0.67 and Gini of 0.56
+
+## 5.2 Scoring Holdout sample
+```{r}
+cart.test <- test
+cart.test$predict.class <- predict(ptree, test, type="class")
+cart.test$predict.score <- predict(ptree, test, type="prob")
+
+
+cart.test$deciles <- decile(cart.test$predict.score[,2])
+#View(test)
+
+## Ranking code
+tmp_DT = data.table(cart.test)
+h_rank <- tmp_DT[, list(
+  cnt = length(TARGET), 
+  cnt_resp = sum(as.numeric(as.character(TARGET))), 
+  cnt_non_resp = sum(as.numeric(as.character(TARGET)) == 0)),
+  #cnt_resp = sum(TARGET), 
+  #cnt_non_resp = sum(TARGET == 0)) , 
+  by=deciles][order(-deciles)]
+h_rank$rrate <- round(h_rank$cnt_resp / h_rank$cnt,4);
+h_rank$cum_resp <- cumsum(h_rank$cnt_resp)
+h_rank$cum_non_resp <- cumsum(h_rank$cnt_non_resp)
+h_rank$cum_rel_resp <- round(h_rank$cum_resp / sum(h_rank$cnt_resp),4);
+h_rank$cum_rel_non_resp <- round(h_rank$cum_non_resp / sum(h_rank$cnt_non_resp),4);
+h_rank$ks <- abs(h_rank$cum_rel_resp - h_rank$cum_rel_non_resp)*100;
+h_rank$rrate <- percent(h_rank$rrate)
+h_rank$cum_rel_resp <- percent(h_rank$cum_rel_resp)
+h_rank$cum_rel_non_resp <- percent(h_rank$cum_rel_non_resp)
+
+head(h_rank)
+
+# with(cart.test, table(TARGET, predict.class))
+# auc
+# KS
+# gini
+```
+
+```{r}
+pred <- prediction(cart.test$predict.score[,2], cart.test$TARGET)
+perf <- performance(pred, "tpr", "fpr")
+KS <- max(attr(perf, 'y.values')[[1]]-attr(perf, 'x.values')[[1]])
+auc <- performance(pred,"auc"); 
+auc <- as.numeric(auc@y.values)
+
+gini = ineq(cart.test$predict.score[,2], type="Gini")
+
+with(cart.test, table(TARGET, predict.class))
+cat('\nAUC: ',auc, '\nKS: ',KS, '\nGini: ', gini)
+
+```
+
+#### Interpretation:
+* The metrics of the holdout sample is above the general accepted values KS of 0.46 and Gini of 0.61 which is above the accepted 0.6 value. 
+
+
+```{r}
+confusionMatrix(cart.test$TARGET, cart.test$predict.class)
+```
+
+## Conclusion to CART model:
+* The accuracy of 0.84 on the holdout sample is good and is encouraging. Given these measures CART model can be used make predictions for the unseen data. But there is still room for improvement and other model performance on the given data should be looked into to decide best model for making the predictions.
+
+```{r, results='asis', eval=(knitr::opts_knit$get('rmarkdown.pandoc.to') == 'latex')}
+cat('\\pagebreak')
+```
+
+# 6. Random Forest Model
+```{r}
+rf.data <- train.balanced
+colnames(train.balanced)
+```
+
+```{r}
+library(randomForest)
+```
+
+## Training the Random Forest model
+```{r}
+RF <- randomForest(as.factor(TARGET) ~ ., data = rf.data[,c(-1,-11,-40)], 
+                   ntree= 400, mtry = 4, nodesize = 10,
+                   importance=TRUE)
+
+
+print(RF)
+```
+
+```{r}
+plot(RF)
+legend("topright", c("OOB", "0", "1"), text.col=1:6, lty=1:3, col=1:3)
+title(main="Error Rates Random Forest RFDF.dev")
+```
+
+#### Interpretaion:
+* The generated model has good performance, with OOB error rate of 1.95%, however the peformance on the holdout sample be considered to check whether the model has overfit.
+
+
+## List the importance of the variables
+```{r}
+#RF$err.rate
+impVar <- round(randomForest::importance(RF), 2)
+impVar[order(impVar[,3], decreasing=TRUE),]
+
+```
+
+#### Interpretation:
+* The top three important variables for the model is the Length of relationship with the bank, cash withdrawal amount and age. These three variables gives important information about loyalty of a customer, the financial status based on level of balance a customer hold in the account and the age the active repayment years or working years still left for a customer.
+
+
+```{r, echo=TRUE}
+## Tuning Random Forest
+tRF <- tuneRF(x = rf.data[,-c(1,2,11,40)], 
+              y=as.factor(rf.data$TARGET),
+              mtryStart = 3, 
+              ntreeTry=100, 
+              stepFactor = 1.5, 
+              improve = 0.001, 
+              trace=TRUE, 
+              plot = TRUE,
+              doBest = TRUE,
+              nodesize = 100, 
+              importance=TRUE
+    )
+
+#?tuneRF
+```
+
+## 6.1 Measuring the model performance
+```{r}
+#rf.train <- train
+rf.data$predict.class <- predict(tRF, rf.data, type="class")
+rf.data$predict.score <- predict(tRF, rf.data, type="prob")
+#head(rf.data)
+#class(rf.data$predict.score)
+
+```
+
+```{r}
+## deciling
+
+
+rf.data$deciles <- decile(rf.data$predict.score[,2])
+
+
+#library(data.table)
+tmp_DT = data.table(rf.data)
+rank <- tmp_DT[, list(
+  cnt = length(TARGET), 
+  cnt_resp = sum(as.numeric(as.character(TARGET))), 
+  cnt_non_resp = sum(as.numeric(as.character(TARGET)) == 0)),
+  #cnt_resp = sum(TARGET), 
+  #cnt_non_resp = sum(TARGET == 0)) , 
+  by=deciles][order(-deciles)]
+rank$rrate <- round (rank$cnt_resp / rank$cnt,2);
+rank$cum_resp <- cumsum(rank$cnt_resp)
+rank$cum_non_resp <- cumsum(rank$cnt_non_resp)
+rank$cum_rel_resp <- round(rank$cum_resp / sum(rank$cnt_resp),2);
+rank$cum_rel_non_resp <- round(rank$cum_non_resp / sum(rank$cnt_non_resp),2);
+rank$ks <- abs(rank$cum_rel_resp - rank$cum_rel_non_resp);
+
+
+#library(scales)
+rank$rrate <- percent(rank$rrate)
+rank$cum_rel_resp <- percent(rank$cum_rel_resp)
+rank$cum_rel_non_resp <- percent(rank$cum_rel_non_resp)
+
+head(rank)
+
+#sum(train$TARGET) / nrow(train)
+
+
+#library(ROCR)
+pred <- prediction(rf.data$predict.score[,2], rf.data$TARGET)
+perf <- performance(pred, "tpr", "fpr")
+#plot(perf)
+```
+
+```{r}
+KS <- max(attr(perf, 'y.values')[[1]]-attr(perf, 'x.values')[[1]])
+cat('KS: ',KS,'\n')
+
+## Area Under Curve
+auc <- performance(pred,"auc"); 
+auc <- as.numeric(auc@y.values)
+cat('AUC: ',auc,'\n')
+
+## Gini Coefficient
+#library(ineq)
+gini = ineq(rf.data$predict.score[,2], type="Gini")
+cat('Gini:', gini,'\n\n')
+
+## Classification Error
+with(rf.data, table(TARGET, predict.class))
+```
+
+#### Interpretation:
+* A KS of 0.87 looks susceptible and whether the model has overfit needs to be looked based on the performance on the holdout sample, the Gini of 0.55 is below the general accepted level of 0.6
+
+## 6.2 Scoring Holdout sample
+```{r}
+## Scoring syntax
+rf.test <- test
+rf.test$predict.class <- predict(tRF, rf.test, type="class")
+rf.test$predict.score <- predict(tRF, rf.test, type="prob")
+
+rf.test$deciles <- decile(rf.test$predict.score[,2])
+
+tmp_DT = data.table(rf.test)
+h_rank <- tmp_DT[, list(
+  cnt = length(TARGET),
+  cnt_resp = sum(as.numeric(as.character(TARGET))), 
+  cnt_non_resp = sum(as.numeric(as.character(TARGET)) == 0)),
+  #cnt_resp = sum(TARGET), 
+  #cnt_non_resp = sum(TARGET == 0)) , 
+  by=deciles][order(-deciles)]
+h_rank$rrate <- round (h_rank$cnt_resp / h_rank$cnt,2);
+h_rank$cum_resp <- cumsum(h_rank$cnt_resp)
+h_rank$cum_non_resp <- cumsum(h_rank$cnt_non_resp)
+h_rank$cum_rel_resp <- round(h_rank$cum_resp / sum(h_rank$cnt_resp),2);
+h_rank$cum_rel_non_resp <- round(h_rank$cum_non_resp / sum(h_rank$cnt_non_resp),2);
+h_rank$ks <- abs(h_rank$cum_rel_resp - h_rank$cum_rel_non_resp);
+
+
+#library(scales)
+h_rank$rrate <- percent(h_rank$rrate)
+h_rank$cum_rel_resp <- percent(h_rank$cum_rel_resp)
+h_rank$cum_rel_non_resp <- percent(h_rank$cum_rel_non_resp)
+
+#View(h_rank)
+
+#sum(test$TARGET) / nrow(test)
+
+
+#library(ROCR)
+pred <- prediction(rf.test$predict.score[,2], rf.test$TARGET)
+perf <- performance(pred, "tpr", "fpr")
+plot(perf)
+
+```
+
+```{r}
+KS <- max(attr(perf, 'y.values')[[1]]-attr(perf, 'x.values')[[1]])
+
+## Area Under Curve
+auc <- performance(pred,"auc"); 
+auc <- as.numeric(auc@y.values)
+
+## Gini Coefficient
+#library(ineq)
+gini = ineq(rf.test$predict.score[,2], type="Gini")
+
+cat('AUC: ',auc,'\n')
+cat('KS: ',KS,'\n')
+cat('Gini:', gini,'\n\n')
+
+## Classification Error
+with(rf.test, table(TARGET, predict.class))
+```
+
+#### Interpretation:
+* The metrics on the holdout sample comes close to the general achievable level given the data set of 0.64, but the Gini of 0.51 is still below the 0.6 level 
+
+### Holdout Sample Confusion matrix
+```{r}
+confusionMatrix(rf.test$TARGET, rf.test$predict.class)
+```
+
+#### Interpretation:
+* The model accuracy on the holdout sample 0f 92% is very good given the model was able to ahieve is level of accuracy on the unseen dataset is encouraging, still as the data was unbalanced better data with resonable proportion between positive and negative class will reduce false negatives and more importantly false postives.
+
+## Conclusion to Random Forest Model
+* The random forest model accuracy of 92% is 10% more than the CART model, which makes random forest a better model for this dataset, however alternative models performance can be considered before deciding and even better a ensemble of models can constructed to measure the peformance of all the models.
+
+```{r, results='asis', eval=(knitr::opts_knit$get('rmarkdown.pandoc.to') == 'latex')}
+cat('\\pagebreak')
+```
+
+# 7. Neural Network Model
+```{r, include=FALSE}
+library(dummies)
+library(tidyverse)
+library(neuralnet)
+library(GGally)
+library(ROSE)
+library(corrplot)
+library(psych)
+library(data.table)
+```
+
+
+```{r, include=FALSE}
+setwd("C:/Users/Mease/Desktop/Machine_Learning/GL_BACP/Module IV/Resources")
+loan_d <- read.csv('PL_XSELL (2).csv', header = TRUE)
+loan_d <- loan_d[,-c(1,7,11,40)]
+```
+
+## 7.1 Neural Network model variables inclusion
+```{r}
+nn.data <- dummy.data.frame(loan_d, names = c("GENDER","OCCUPATION","ACC_TYPE"))
+colnames(nn.data)[9] <- "OCCUPATIONSELF_EMP"
+colnames(nn.data)
+
+```
+
+#### Interpretation:
+* The neural network model requires the variables to be numeric and converting the categorical variables to dummy variables makes it possible to include the categorical variables for training the model. The Age bracket variables has not been considered training the model and it constributes less towards the predictive power of the model given customer age is already present in the dataset.
+
+```{r}
+# Split into test and train sets
+set.seed(1234)
+sample <- sample.int(n = nrow(nn.data), size = floor(.7*nrow(nn.data)), replace = F)
+train <- nn.data[sample, ]
+test  <- nn.data[-sample, ]
+```
+
+```{r}
+train.sub <- train[,-1]
+train.sub <- scale(train.sub)
+train.sub <- cbind(train$TARGET, train.sub)
+colnames(train.sub)[1] <- 'TARGET'
+```
+
+
+## 7.2 Model Training using the scaled data
+```{r, echo=TRUE}
+set.seed(123)
+NN1 <- neuralnet(formula = TARGET ~ AGE+GENDERF+GENDERM+GENDERO+BALANCE+OCCUPATIONPROF+OCCUPATIONSAL+OCCUPATIONSELF_EMP+OCCUPATIONSENP+SCR+HOLDING_PERIOD+ACC_TYPECA+ACC_TYPESA+LEN_OF_RLTN_IN_MNTH+NO_OF_L_CR_TXNS+NO_OF_L_DR_TXNS+TOT_NO_OF_L_TXNS+NO_OF_BR_CSH_WDL_DR_TXNS+NO_OF_ATM_DR_TXNS+NO_OF_NET_DR_TXNS+NO_OF_MOB_DR_TXNS+NO_OF_CHQ_DR_TXNS+FLG_HAS_CC+AMT_ATM_DR+AMT_BR_CSH_WDL_DR+AMT_CHQ_DR+AMT_NET_DR+AMT_MOB_DR+AMT_L_DR+FLG_HAS_ANY_CHGS+AMT_OTH_BK_ATM_USG_CHGS+AMT_MIN_BAL_NMC_CHGS+NO_OF_IW_CHQ_BNC_TXNS+NO_OF_OW_CHQ_BNC_TXNS+AVG_AMT_PER_ATM_TXN+AVG_AMT_PER_CSH_WDL_TXN+AVG_AMT_PER_CHQ_TXN+AVG_AMT_PER_NET_TXN+AVG_AMT_PER_MOB_TXN+FLG_HAS_NOMINEE+FLG_HAS_OLD_LOAN,
+    train.sub, 
+    hidden = 3,
+    err.fct = "sse",
+    linear.output = F,
+    lifesign = "full",
+    lifesign.step = 500,
+    threshold = 0.1
+  )
+```
+
+#### Interpretation:
+* The hidden layers of 3 has been considered and sum of squared error as error measure, the minimum decrease in the Gradient(slope) of 0.1 is taken.
+
+
+```{r}
+nn.results <- train.sub
+
+nn.results <- cbind(nn.results, as.data.frame(NN1$net.result[[1]]))
+colnames(nn.results)[43] <- "Prob"
+
+## The distribution of the estimated probabilities
+#print(quantile(nn.results$Prob, c(0,1,5,10,25,50,75,90,95,98,99,100)/100))
+```
+
+
+```{r}
+#hist(nn.results$Prob)
+```
+
+## 7.3 Scoring the NN model
+```{r}
+## deciling
+library(scales)
+library(caret)
+decile <- function(x){
+  deciles <- vector(length=10)
+  for (i in seq(0.1,1,.1)){
+    deciles[i*10] <- quantile(x, i, na.rm=T)
+  }
+  return (
+  ifelse(x<deciles[1], 1,
+  ifelse(x<deciles[2], 2,
+  ifelse(x<deciles[3], 3,
+  ifelse(x<deciles[4], 4,
+  ifelse(x<deciles[5], 5,
+  ifelse(x<deciles[6], 6,
+  ifelse(x<deciles[7], 7,
+  ifelse(x<deciles[8], 8,
+  ifelse(x<deciles[9], 9, 10
+  ))))))))))
+}
+
+nn.results$deciles <- decile(nn.results$Prob)
+
+
+## Ranking code
+##install.packages("data.table")
+#library(data.table)
+tmp_DT = data.table(nn.results)
+rank <- tmp_DT[, list(
+  cnt = length(TARGET), 
+  cnt_resp = sum(TARGET), 
+  cnt_non_resp = sum(TARGET == 0)) , 
+  by=deciles][order(-deciles)]
+rank$rrate <- round (rank$cnt_resp / rank$cnt,2);
+rank$cum_resp <- cumsum(rank$cnt_resp)
+rank$cum_non_resp <- cumsum(rank$cnt_non_resp)
+rank$cum_rel_resp <- round(rank$cum_resp / sum(rank$cnt_resp),2);
+rank$cum_rel_non_resp <- round(rank$cum_non_resp / sum(rank$cnt_non_resp),2);
+rank$ks <- abs(rank$cum_rel_resp - rank$cum_rel_non_resp);
+
+
+#library(scales)
+rank$rrate <- percent(rank$rrate)
+rank$cum_rel_resp <- percent(rank$cum_rel_resp)
+rank$cum_rel_non_resp <- percent(rank$cum_rel_non_resp)
+
+head(rank)
+```
+
+#### Interpretation:
+* The KS of 0.39 is achieved which is close to the acceptable 0.4 level.
+
+### Confusion Matrix
+```{r}
+nn.results$Class = ifelse(nn.results$Prob>0.5,1,0)
+nn.results$Class <- as.factor(nn.results$Class)
+#with( train, table(TARGET, as.factor(Class)  ))
+
+##install.packages("caret")
+#View(nn.results)
+confusionMatrix(nn.results$TARGET, nn.results$Class)
+```
+
+#### Interpretation:
+* The accuracy for the model without using the over sampling method is 88%, with sensitivity(true positive rate) of 90% and specificity(true negative rate) 0.56
+
+## 7.3 Scoring the holdout sample
+```{r}
+## Scoring another dataset using the Neural Net Model Object
+## To score we will use the compute function
+nn.test <- test[,-1]
+nn.test <- scale(nn.test)
+
+
+compute.output = compute(NN1, nn.test)
+nn.test <- cbind(nn.test, as.data.frame(compute.output$net.result))
+
+nn.test <- cbind(test$TARGET, nn.test)
+colnames(nn.test)[1] <- "TARGET"
+colnames(nn.test)[43] <- "Predict.score"
+```
+
+
+```{r}
+print(quantile(nn.test$Predict.score, c(0,1,5,10,25,50,75,90,95,98,99,100)/100))
+```
+
+```{r}
+#quantile(nn.s_test$Predict.score.V1, c(0,1,5,10,25,50,75,90,95,99,100)/100)
+nn.test$deciles <- decile(nn.test$Predict.score)
+
+tmp_DT = data.table(nn.test)
+h_rank <- tmp_DT[, list(
+  cnt = length(TARGET), 
+  cnt_resp = sum(TARGET), 
+  cnt_non_resp = sum(TARGET== 0)) , 
+  by=deciles][order(-deciles)]
+h_rank$rrate <- round (h_rank$cnt_resp / h_rank$cnt,2);
+h_rank$cum_resp <- cumsum(h_rank$cnt_resp)
+h_rank$cum_non_resp <- cumsum(h_rank$cnt_non_resp)
+h_rank$cum_rel_resp <- round(h_rank$cum_resp / sum(h_rank$cnt_resp),2);
+h_rank$cum_rel_non_resp <- round(h_rank$cum_non_resp / sum(h_rank$cnt_non_resp),2);
+h_rank$ks <- abs(h_rank$cum_rel_resp - h_rank$cum_rel_non_resp);
+
+h_rank$rrate <- percent(h_rank$rrate)
+h_rank$cum_rel_resp <- percent(h_rank$cum_rel_resp)
+h_rank$cum_rel_non_resp <- percent(h_rank$cum_rel_non_resp)
+
+head(h_rank)
+#head(rank)
+
+```
+
+#### Interpretation:
+* The KS of 0.32 is ahieved which lesser than the training data and CART and Random Forest models.
+
+### Confusion Matrix for holdout sample
+```{r}
+nn.test$Class = ifelse(nn.test$Predict.score>0.5,1,0)
+nn.test$Class <- as.factor(nn.test$Class)
+#with( train, table(TARGET, as.factor(Class)  ))
+
+##install.packages("caret")
+#View(nn.results)
+confusionMatrix(nn.test$TARGET, nn.test$Class)
+#dim(nn.test)
+```
+
+#### Interpretation:
+* The accuracy of 86% achieved doesn't predict the positive response accurately as the dataset has more non-reponders number the 86% just represents 5068 cases which were corretly classified as non-responders, and here again the unbalanced nature of the data is causing the model to have high accuracy but the actual performance doesn't look every encouraging which miss classifies a lot of the responders.
+
+## 7.4 Training the model using balanced data(over sampling method)
+```{r}
+train.balanced <- ovun.sample(TARGET~., data=train,
+                                p=0.3, 
+                                seed=1, method="over")$data
+
+train.balanced <- train.balanced[sample(nrow(train.balanced)),]
+```
+
+
+```{r}
+train.b_sub <- train.balanced[,-1]
+train.b_sub <- scale(train.b_sub)
+train.b_sub <- cbind(train.balanced$TARGET, train.b_sub)
+colnames(train.b_sub)[1] <- 'TARGET'
+#View(train.b_sub)
+```
+
+
+
+```{r}
+set.seed(123)
+NN1 <- neuralnet(formula = TARGET ~ AGE+GENDERF+GENDERM+GENDERO+BALANCE+OCCUPATIONPROF+OCCUPATIONSAL+OCCUPATIONSELF_EMP+OCCUPATIONSENP+SCR+HOLDING_PERIOD+ACC_TYPECA+ACC_TYPESA+LEN_OF_RLTN_IN_MNTH+NO_OF_L_CR_TXNS+NO_OF_L_DR_TXNS+TOT_NO_OF_L_TXNS+NO_OF_BR_CSH_WDL_DR_TXNS+NO_OF_ATM_DR_TXNS+NO_OF_NET_DR_TXNS+NO_OF_MOB_DR_TXNS+NO_OF_CHQ_DR_TXNS+FLG_HAS_CC+AMT_ATM_DR+AMT_BR_CSH_WDL_DR+AMT_CHQ_DR+AMT_NET_DR+AMT_MOB_DR+AMT_L_DR+FLG_HAS_ANY_CHGS+AMT_OTH_BK_ATM_USG_CHGS+AMT_MIN_BAL_NMC_CHGS+NO_OF_IW_CHQ_BNC_TXNS+NO_OF_OW_CHQ_BNC_TXNS+AVG_AMT_PER_ATM_TXN+AVG_AMT_PER_CSH_WDL_TXN+AVG_AMT_PER_CHQ_TXN+AVG_AMT_PER_NET_TXN+AVG_AMT_PER_MOB_TXN+FLG_HAS_NOMINEE+FLG_HAS_OLD_LOAN,
+    train.b_sub, 
+    hidden = 3,
+    err.fct = "sse",
+    linear.output = FALSE,
+    lifesign = "full",
+    lifesign.step = 500,
+    threshold = 0.1
+  )
+```
+
+
+```{r}
+cat('\n\n')
+nn.b_results <- train.b_sub
+#View(nn.results)
+nn.b_results <- cbind(nn.b_results, as.data.frame(NN1$net.result[[1]]))
+colnames(nn.b_results)[43] <- "Prob"
+
+## The distribution of the estimated probabilities
+print(quantile(nn.b_results$Prob, c(0,1,5,10,25,50,75,90,95,98,99,100)/100))
+```
+
+
+
+
+```{r}
+#hist(nn.b_results$Prob)
+```
+
+```{r}
+## deciling
+library(scales)
+library(caret)
+decile <- function(x){
+  deciles <- vector(length=10)
+  for (i in seq(0.1,1,.1)){
+    deciles[i*10] <- quantile(x, i, na.rm=T)
+  }
+  return (
+  ifelse(x<deciles[1], 1,
+  ifelse(x<deciles[2], 2,
+  ifelse(x<deciles[3], 3,
+  ifelse(x<deciles[4], 4,
+  ifelse(x<deciles[5], 5,
+  ifelse(x<deciles[6], 6,
+  ifelse(x<deciles[7], 7,
+  ifelse(x<deciles[8], 8,
+  ifelse(x<deciles[9], 9, 10
+  ))))))))))
+}
+
+nn.b_results$deciles <- decile(nn.b_results$Prob)
+
+
+## Ranking code
+##install.packages("data.table")
+#library(data.table)
+tmp_DT = data.table(nn.b_results)
+rank <- tmp_DT[, list(
+  cnt = length(TARGET), 
+  cnt_resp = sum(TARGET), 
+  cnt_non_resp = sum(TARGET == 0)) , 
+  by=deciles][order(-deciles)]
+rank$rrate <- round (rank$cnt_resp / rank$cnt,2);
+rank$cum_resp <- cumsum(rank$cnt_resp)
+rank$cum_non_resp <- cumsum(rank$cnt_non_resp)
+rank$cum_rel_resp <- round(rank$cum_resp / sum(rank$cnt_resp),2);
+rank$cum_rel_non_resp <- round(rank$cum_non_resp / sum(rank$cnt_non_resp),2);
+rank$ks <- abs(rank$cum_rel_resp - rank$cum_rel_non_resp);
+
+
+#library(scales)
+rank$rrate <- percent(rank$rrate)
+rank$cum_rel_resp <- percent(rank$cum_rel_resp)
+rank$cum_rel_non_resp <- percent(rank$cum_rel_non_resp)
+
+head(rank)
+```
+
+### Confusion matrix of over sampled data
+
+```{r}
+nn.results$Class = ifelse(nn.results$Prob>0.5,1,0)
+nn.results$Class <- as.factor(nn.results$Class)
+#with( train, table(TARGET, as.factor(Class)  ))
+
+##install.packages("caret")
+#View(nn.results)
+confusionMatrix(nn.results$TARGET, nn.results$Class)
+```
+
+#### Interpretation:
+* The trained model using the balanced data gives a greater error than the model trained using only the acutal train split data. And it can be looked as the duplicate information is not making the model to learning any better about the patterns in the data, it just creating more difficulties for the model to learn the actual pattern as the accuracy has not improved.
+
+```{r}
+## Scoring another dataset using the Neural Net Model Object
+## To score we will use the compute function
+nn.s_test <- test[,-1]
+nn.s_test <- scale(nn.s_test)
+
+
+compute.output = compute(NN1, nn.s_test)
+nn.s_test <- cbind(nn.s_test, as.data.frame(compute.output$net.result))
+
+nn.s_test <- cbind(test$TARGET, nn.s_test)
+colnames(nn.s_test)[1] <- "TARGET"
+colnames(nn.s_test)[43] <- "Predict.score"
+
+#colnames(nn.s_test)
+```
+
+#### Percetiles for the test set
+```{r}
+print(quantile(nn.s_test$Predict.score, c(0,1,5,10,25,50,75,90,95,98,99,100)/100))
+```
+
+```{r}
+#quantile(nn.s_test$Predict.score.V1, c(0,1,5,10,25,50,75,90,95,99,100)/100)
+nn.s_test$deciles <- decile(nn.s_test$Predict.score)
+
+tmp_DT = data.table(nn.s_test)
+h_rank <- tmp_DT[, list(
+  cnt = length(TARGET), 
+  cnt_resp = sum(TARGET), 
+  cnt_non_resp = sum(TARGET== 0)) , 
+  by=deciles][order(-deciles)]
+h_rank$rrate <- round (h_rank$cnt_resp / h_rank$cnt,2);
+h_rank$cum_resp <- cumsum(h_rank$cnt_resp)
+h_rank$cum_non_resp <- cumsum(h_rank$cnt_non_resp)
+h_rank$cum_rel_resp <- round(h_rank$cum_resp / sum(h_rank$cnt_resp),2);
+h_rank$cum_rel_non_resp <- round(h_rank$cum_non_resp / sum(h_rank$cnt_non_resp),2);
+h_rank$ks <- abs(h_rank$cum_rel_resp - h_rank$cum_rel_non_resp);
+
+h_rank$rrate <- percent(h_rank$rrate)
+h_rank$cum_rel_resp <- percent(h_rank$cum_rel_resp)
+h_rank$cum_rel_non_resp <- percent(h_rank$cum_rel_non_resp)
+
+head(h_rank)
+#head(rank)
+
+```
+
+
+#### Confusion Matrix for the test set
+```{r}
+nn.s_test$Class = ifelse(nn.s_test$Predict.score>0.5,1,0)
+nn.s_test$Class <- as.factor(nn.s_test$Class)
+#with( train, table(TARGET, as.factor(Class)  ))
+
+##install.packages("caret")
+#View(nn.results)
+confusionMatrix(nn.s_test$TARGET, nn.s_test$Class)
+```
+
+#### Interpretation:
+* The Accuracy acieved using the over sampled data doesn't lead in a more accurate model, so trying principal component analysis to reduce the number of variables would be a good method given the neural network model performs better with less covaried data in the training data set.
+
+
+## 7.5 Performing PCA for the training dataset
+
+### Using the actual training set without over sampling
+```{r}
+loan_cor <- cor(train.sub[,-1])
+#View(train.balanced[,-1])
+#print(loan_cor)
+```
+
+### Bartlett test to check whether PCA is possible
+```{r, include=TRUE}
+library(psych)
+print(cortest.bartlett(loan_cor, n= nrow(train)))
+```
+
+#### Interpretation:
+* The p-value from the test tells that the PCA is possible for the data.
+
+```{r}
+loan_e <- eigen(loan_cor)
+loan_vectors <- loan_e$vectors
+loan_values <- loan_e$values
+```
+
+### Sree Plot
+```{r}
+plot(loan_values, type = "both", xlab = "Principal Components", ylab = "Eigen values", main = "Sree Plot: Batting-Variance extracted")
+abline(h=1,lty=5)
+```
+
+#### Interpretation:
+* The sree plot provides visual representation to choose the optimal number PCA components those which have eigen values of 1 or greater, and accordingly there are 14 PCA variables which can be considered good to include to train the nerual network model to check the impact on the classification power of the trained model using the PCA variables as against the actual and over sampled training data.
+
+
+### Cummulative variance explained
+```{r}
+loan_pca_var <- loan_values/length(loan_values)*100
+#print(loan_pca_var)
+print(cumsum(loan_pca_var))
+```
+
+#### Interpretation:
+* The fist 14 PCA explains the 70% variability in the data
+
+
+```{r}
+loan_varscale <- scale(train.sub[,-1])
+#View(loan_varscale)
+loan_score <- as.matrix(loan_varscale%*%loan_vectors)
+#round(cor(bat_score),2)
+#head(loan_score[,1:4])
+
+```
+
+```{r}
+nn.pca <- cbind(train$TARGET, loan_score[,1:14])
+colnames(nn.pca) <- c('TARGET','PC1','PC2','PC3','PC4','PC5','PC6','PC7','PC8','PC9','PC10',
+                      'PC11','PC12','PC13','PC14')
+head(nn.pca[,1:5])
+```
+
+## 7.6 Training the neural network model with PCA variables
+```{r}
+set.seed(123)
+NN1 <- neuralnet(formula = TARGET ~ PC1+PC2+PC3+PC4+PC5+PC6+PC7+PC8+PC9+PC10+PC11+PC12+PC13,
+    nn.pca,
+    hidden = 3,
+    err.fct = "sse",
+    linear.output = F,
+    lifesign = "full",
+    lifesign.step = 1000,
+    threshold = .1,
+    stepmax = 9000
+  )
+```
+
+#### Interpretation:
+* The error for the trained is slightly greater the neural network model trained with actural training set, so PCA is not making the model perform any better than. The error for the model on acutal train set is error value of 658 for this model it is 691 when the model converged, which would not result in acutual difference in classifiying the test set.
+* Hence of the three neural network model trained used three training dataset: acutal training dataset, balanced training data set(using over sampling method) and training dataset after performing PCA. The neural network model created with actual training dataset is better and its results on test dataset will be considered to build the ensemble model.
+
+```{r, results='asis', eval=(knitr::opts_knit$get('rmarkdown.pandoc.to') == 'latex')}
+cat('\\pagebreak')
+```
+
+
+# 8. Ensemble Model
+
+## Ensemble advantages
+* Ensemble learning helps improve machine learning results by combining several models. Ensemble methods combine several machine learning results(techniques) into one predictive model in order to decrease variance (bagging), bias (boosting), or improve predictions (stacking). Here using three ensemble methods to improve classification of the test dataset: Majority voting, Weighted average, Averaging.
+* The techinque of the using the results from the models as variables to train the new model on top of the bottom layer models is also widely employed which provides better performance as against the simpler three formula methods.
+
+## 8.1 Majority voting
+
+```{r, echo=TRUE}
+test$pred_majority<-as.factor(ifelse(rf.test$predict.class==1 & nn.test$Class==1,1,ifelse(rf.test$predict.class==1 & cart.test$predict.class==1,1,ifelse(nn.test$Class==1 & cart.test$predict.class==1, 1,0))))
+```
+
+## 8.2 Averaging
+```{r, echo=TRUE}
+#Taking average of predictions
+test$pred_avg<-(rf.test$predict.score[,2]+nn.test$Predict.score+cart.test$predict.score)/3
+
+#Splitting into binary classes at 0.5
+test$pred_avg_class<-as.factor(ifelse(test$pred_avg>0.5,1,0)[,2])
+
+```
+
+
+## 8.3 Weighted Average
+
+```{r, echo=TRUE}
+#Taking weighted average of predictions
+test$pred_weighted_avg<-(rf.test$predict.score[,2]*0.5)+(nn.test$Predict.score*0.2)+(cart.test$predict.score*0.3)
+
+#Splitting into binary classes at 0.5
+test$pred_weighted_avg<-as.factor(ifelse(test$pred_weighted_avg>0.5,1,0)[,2])
+
+head(test[,c(1, 43, 45, 46)], 10)
+```
+
+## 8.4 Scoring the ensemble results
+
+### Confusion matrix of Majority method
+```{r}
+confusionMatrix(nn.test$TARGET, test$pred_majority)
+```
+
+#### Interpretation:
+* The accuracy of the majority is better than the CART model and Neural Network holdout sample results. The Random forest model performs better than the majority method. 
+
+### Confusion matrix of Average method
+```{r}
+confusionMatrix(nn.test$TARGET, test$pred_avg_class)
+```
+
+#### Interpretation
+* The average method also performs better than the CART and neural network model, but cannot outpeform the random forest model
+
+### Confusion matrix of Weighted Average method
+```{r}
+confusionMatrix(nn.test$TARGET, test$pred_weighted_avg)
+```
+
+#### Interpretation:
+* Based on its individual perform of the Random Forest model the highest weight of 0.5 was assigned to it and 0.3 to CART model and 0.2 to neural network model. Which againg provides results better than the CART and Neural Network but below the Random Forest. Which may have pushed more towards the predictions influenced by Random Forest as it was a better model a higher weight was assigned to differentiate between the Majority and Average method results.
+
+# 9. Project Conclusion
+* The binary classification problem is very common in business problems and ability to analyse to provide best accurate insights to take informed decision allows the decision makers to adopt more confident actions based on the measures gained from the classification model results. So, it is very important to have the ability to build such a model which provides accurate predictions which will allow to reduce the uncertainty associated with data and not add to the uncontrolable variance which are not captured by the data.
+
+

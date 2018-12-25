@@ -1,0 +1,626 @@
+---
+output: pdf_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, comment = "")
+#options(warn = -1)
+
+setwd("C:/Users/Mease/Desktop/Machine_Learning/GL_BACP/Module VI/Assignment")
+```
+
+
+```{r author, echo=FALSE, fig.cap="", out.width = '100%', fig.align='center'}
+knitr::include_graphics("pics/author.png")
+```
+
+```{r toc, echo=FALSE, fig.cap="", out.width = '100%', fig.align='center'}
+knitr::include_graphics("pics/toc_2.png")
+```
+#Contents
+####1. Project Objective   
+
+####2. Exploratory Analysis
+
+
+####3. Forecast using simpler methods
+
+####4. Decomposition of times series
+
+####5. Stationarity of the residuals
+
+
+####6. Fitting the models on Train set and testing
+
+
+####7. Forecasting for July 2017 to December 2018
+
+####8. Project Conclusion
+
+```{r, results='asis', eval=(knitr::opts_knit$get('rmarkdown.pandoc.to') == 'latex')}
+cat('\\pagebreak')
+```
+
+# 1. Project objective
+* Using the demand data for two products to build a forecasting models and choose the best model based the accuracy on the validation data and test scores.
+* Based on the accuracy of the models choose the best model to make forecast, along with the confidence intervals, for the test dataset.
+
+# 2. Exploratory Analysis
+
+* An explanatory model is useful because it incorporates information about other variables, rather than only historical values of the variable to be forecast. However, there are several reasons a forecaster might select a time series model rather than an explanatory or mixed model. 
+* First, the system may not be understood, and even if it was understood it may be extremely difficult to measure the relationships that are assumed to govern its behaviour. 
+* Second, it is necessary to know or forecast the future values of the various predictors in order to be able to forecast the variable of interest, and this may be too difficult. 
+* Third, the main concern may be only to predict what will happen, not to know why it happens. Finally, the time series model may give more accurate forecasts than an explanatory or mixed model.
+
+```{r}
+library(readxl) #, warn.conflicts = FALSE, quietly = TRUE
+library(forecast)
+library(ggplot2)
+```
+
+```{r}
+data <- read_xls("Demand.xls")
+head(data)
+```
+
+#### Always start by graphing the data. Are there consistent patterns? Is there a significant trend? Is seasonality important? Is there evidence of the presence of business cycles? Are there any outliers in the data that need to be explained by those with expert knowledge? How strong are the relationships among the variables available for analysis?
+
+#### Item A visualization
+```{r}
+#itemA <- ts(data['Item A'], start = 2002, end = 2007, frequency = 1)
+itemA <- ts(data['Item A'], start = 2002, frequency = 12)
+#plot(itemA)
+
+autoplot(itemA) +
+  ggtitle("Demand Graph: Item A") +
+  xlab("Year") +
+  ylab("Thousands")
+
+```
+
+#### Observation:
+* There is every slow trend in the data but definitely there is seasonality, with increase in season demand towards the latter part
+* The Seasonality is additive for the demand of Item A
+
+```{r}
+ggseasonplot(itemA, year.labels=TRUE, year.labels.left=TRUE) +
+  ylab("$ thousand") +
+  ggtitle("Seasonal plot: Item A demand")
+```
+
+```{r}
+ggseasonplot(itemA, polar=TRUE) +
+  ylab("$ thousand") +
+  ggtitle("Seasonal plot: Item A demand")
+```
+
+#### Seasonal sub-series plots
+```{r}
+ggsubseriesplot(itemA) +
+  ylab("$ thousand") +
+  ggtitle("Seasonal plot: Item A demand")
+```
+
+#### Observation:
+* The month of December has higher sales compared to all other months
+* The month of January has lower sales compared to all other months
+
+```{r, include = FALSE}
+itemA_win <- window(itemA, start=2002)
+gglagplot(itemA_win)
+```
+
+#### Correlogram of Item A
+```{r}
+ggAcf(itemA, lag=50)
+```
+
+#### Observation:
+* Lag 6 and one apart multiple of 6 is lower than for the other lags. This is due to the seasonal pattern in the data.
+* Lag 12 and its multiple is higher than for the other lags this due larger effect of the seasonality as there is no trend in data the correlations seems to similar and continuing the same pattern
+
+
+```{r}
+itemB <- ts(data['Item B'], start = c(2002,1), end = c(2017,7), frequency = 12)
+#plot(itemB)
+
+autoplot(itemB) +
+  ggtitle("Demand Graph: Item B") +
+  xlab("Year") +
+  ylab("Thousands")
+```
+
+#### Observation:
+* Here, there is a clear and decreasing trend. There is also a strong seasonal pattern that decreases in size as the level of the series decreases.
+* The trend is changing slowly and seasonality is multiplicative
+
+```{r}
+ggseasonplot(itemB, year.labels=TRUE, year.labels.left=TRUE) +
+  ylab("$ thousands") +
+  ggtitle("Seasonal plot: Item B demand")
+```
+
+```{r}
+ggseasonplot(itemB, polar=TRUE) +
+  ylab("$ thousands") +
+  ggtitle("Seasonal plot: Item B demand")
+```
+
+#### Observation:
+* There is large jump in demand in July and decrease in demand in October.
+* There is large drop in demand in January
+
+#### Seasonal sub-series plots
+```{r}
+ggsubseriesplot(itemB) +
+  ylab("$ thousand") +
+  ggtitle("Seasonal plot: Item B demand")
+```
+
+#### Observation
+* The month of July has higher sales compared to other months
+* The month of January has lower sales compared to other months
+
+#### Correlogram of Item B
+```{r}
+
+ggAcf(itemB, lag=50)
+```
+
+#### Observation:
+* The lag 6 through is negative and same for multiples of 6 as the series has decreasing trend the throughs seems to increasing
+* The decreasing highs are because of the seasonality which keeps decreasing the trend
+* The slow decrease in the ACF as the lags increase is due to the trend, while the "scalloped" shape is due the seasonality.
+
+# 3. Forecast using simpler methods
+
+```{r}
+autoplot(itemA) +
+  autolayer(meanf(itemA, h=12),
+    series="Mean", PI=FALSE) +
+  autolayer(naive(itemA, h=12),
+    series="Naïve", PI=FALSE) +
+  autolayer(snaive(itemA, h=12),
+    series="Seasonal naïve", PI=FALSE) +
+  ggtitle("Forecasts for monthly Demand of Item A") +
+  xlab("Year") + ylab("Demand") +
+  guides(colour=guide_legend(title="Forecast"))
+```
+
+```{r}
+autoplot(itemB) +
+  autolayer(meanf(itemB, h=12),
+    series="Mean", PI=FALSE) +
+  autolayer(naive(itemB, h=12),
+    series="Naïve", PI=FALSE) +
+  autolayer(snaive(itemB, h=12),
+    series="Seasonal naïve", PI=FALSE) +
+  ggtitle("Forecasts for monthly Demand of Item B") +
+  xlab("Year") + ylab("Demand") +
+  guides(colour=guide_legend(title="Forecast"))
+```
+
+#### Observation:
+* will serve as benchmarks for the forecast given by other methods for the series
+
+
+### Calender adjusted demand
+```{r}
+dframe <- cbind(Monthly = itemA,
+                DailyAverage = itemA/monthdays(itemA))
+  autoplot(dframe, facet=TRUE) +
+    xlab("Years") + ylab("Demand") +
+    ggtitle("Demand for Item A")
+```
+
+
+```{r}
+dframe <- cbind(Monthly = itemB,
+                DailyAverage = itemB/monthdays(itemB))
+  autoplot(dframe, facet=TRUE) +
+    xlab("Years") + ylab("Demand") +
+    ggtitle("Demand for Item B")
+```
+
+#### Observation:
+* The difference in number of days in some months has no major effect on the series, the pattern of the monthly and calender adjusted series for difference in number of days looks closely the same.
+
+
+### Combined plot
+```{r}
+dframe <- cbind(Item_A = itemA,
+                Item_B = itemB)
+  autoplot(dframe, facet=TRUE) +
+    xlab("Years") + ylab("Demand") +
+    ggtitle("Joint demand plot for two Items A & B")
+```
+
+#### Observation:
+* The two series have evident seasonality, and Item A in particular has its series majorly influenced by seasonality
+* Item A series has no evident trend, whereas Item B has downward trend
+* There is no cyclicality present in the series of both the Items
+* Both the series exhibit multiplicative seasonality which changes with time and trend
+
+
+
+```{r, include=FALSE}
+#checkresiduals(itemB)
+
+```
+
+```{r}
+itemA_win <- window(itemA,start=2002,end=c(2015,12))
+itemAfit1 <- meanf(itemA_win,h=20)
+itemAfit2 <- rwf(itemA_win,h=20)
+itemAfit3 <- snaive(itemA_win,h=20)
+autoplot(itemA) +
+  autolayer(itemAfit1, series="Mean", PI=FALSE) +
+  autolayer(itemAfit2, series="Naïve", PI=FALSE) +
+  autolayer(itemAfit3, series="Seasonal naïve", PI=FALSE) +
+  xlab("Year") + ylab("Demand") +
+  ggtitle("Forecasts for Demand of Item A") +
+  guides(colour=guide_legend(title="Forecast"))
+```
+
+```{r}
+itemA_win_t <- window(itemB, start=2016)
+accuracy(itemAfit1, itemA_win_t)
+accuracy(itemAfit2, itemA_win_t)
+accuracy(itemAfit3, itemA_win_t)
+```
+
+#### Observation
+* The accuracy scores are not good on the test set from any of the simple methods for Item A
+
+
+```{r}
+itemB_win <- window(itemB,start=2002,end=c(2015,12))
+itemBfit1 <- meanf(itemB_win,h=20)
+itemBfit2 <- rwf(itemB_win,h=20)
+itemBfit3 <- snaive(itemB_win,h=20)
+autoplot(itemB) +
+  autolayer(itemBfit1, series="Mean", PI=FALSE) +
+  autolayer(itemBfit2, series="Naïve", PI=FALSE) +
+  autolayer(itemBfit3, series="Seasonal naïve", PI=FALSE) +
+  xlab("Year") + ylab("Demand") +
+  ggtitle("Forecasts for Demand of Item B") +
+  guides(colour=guide_legend(title="Forecast"))
+```
+
+```{r}
+itemB_win_t <- window(itemB, start=2016)
+accuracy(itemBfit1, itemB_win_t)
+accuracy(itemBfit2, itemB_win_t)
+accuracy(itemBfit3, itemB_win_t)
+```
+
+#### Observation
+* The accuracy scores are somewhat good on the test set given by seasonal naive method from the simple methods for Item B
+
+```{r, include=FALSE}
+forecast(itemB, h=12)
+```
+
+# 4. Decomposition of times series
+
+```{r, include=FALSE}
+itemB %>% decompose(type="multiplicative") %>%
+  autoplot() + xlab("Year") +
+  ggtitle("Classical multiplicative decomposition
+    of Item B demand")
+```
+
+```{r, include=FALSE}
+library(seasonal)
+itemB %>% seas(x11="") -> fit
+autoplot(fit) +
+  ggtitle("X11 decomposition of Item B demand")
+
+itemA %>% seas(x11="") -> fit1
+autoplot(fit1) +
+  ggtitle("X11 decomposition of Item B demand")
+```
+
+```{r}
+autoplot(itemB, series="Data") +
+  autolayer(trendcycle(fit), series="Trend") +
+  autolayer(seasadj(fit), series="Seasonally Adjusted") +
+  xlab("Year") + ylab("New orders index") +
+  ggtitle("Item B demand") +
+  scale_colour_manual(values=c("gray","blue","red"),
+             breaks=c("Data","Seasonally Adjusted","Trend"))
+```
+
+```{r}
+autoplot(itemA, series="Data") +
+  autolayer(trendcycle(fit1), series="Trend") +
+  autolayer(seasadj(fit1), series="Seasonally Adjusted") +
+  xlab("Year") + ylab("New orders index") +
+  ggtitle("Item A demand") +
+  scale_colour_manual(values=c("gray","blue","red"),
+             breaks=c("Data","Seasonally Adjusted","Trend"))
+```
+
+#### Observation:
+* The Seasonally adjusted plots provides clear visuals of the trend and remainder in the each of the series
+* The Trend in Item B is moving downwards from the start of the series
+* The Trend in Item A is not that evident at the begining but then a slow upward trend picks in the mid-section of the series
+
+
+```{r, include=FALSE}
+fit %>% seasonal() %>% ggsubseriesplot() + ylab("Seasonal")
+```
+
+```{r, include=FALSE}
+itemB %>% seas() %>%
+autoplot() +
+  ggtitle("SEATS decomposition of Item B demand")
+```
+
+```{r}
+itemc <- data['Item B']
+itemc <- ts(itemc, start = c(2002,1), end = c(2017,6), frequency = 12)
+itemc %>%
+  stl(t.window=13, s.window="periodic", robust=TRUE) %>%
+  autoplot()+
+  ggtitle("STL decomposition of Item B demand")
+
+itemB_decom <- stl(itemc, t.window=13, s.window="periodic", robust=TRUE)
+
+#use the seasonal() function for the seasonal component, the trendcycle() function for trend-cycle component, and the remainder() function for the remainder component. The seasadj() function can be used to compute the seasonally adjusted series.
+
+#View(data)
+```
+
+```{r}
+itemD <- data['Item A']
+itemD <- ts(itemD, start = c(2002,1), end = c(2017,6), frequency = 12)
+itemD %>%
+  stl(t.window=13, s.window="periodic", robust=TRUE) %>%
+  autoplot()+
+  ggtitle("STL decomposition of Item A demand")
+
+itemA_decom <- stl(itemD, t.window=13, s.window="periodic", robust=TRUE)
+```
+
+#### Observation:
+* The Item A series is a stable series with only seasonality initial but turns to have slow increasing trend in mid-section
+* The Item B series has both trend and seasonality evident from the initial data points, having a medium decreaing trend with varying seasonality with time
+* The seasonality in the both the series is multiplicative as it changes with time clearly evident for series B but visible for series A as from the mid-section of the series
+
+
+```{r, include=FALSE}
+fit <- stl(itemc, t.window=13, s.window="periodic",
+  robust=TRUE)
+fit %>% seasadj() %>% naive() %>%
+  autoplot() + ylab("Demand") +
+  ggtitle("Naive forecasts of seasonally adjusted Item B data")
+```
+
+```{r, include=FALSE}
+fit %>% forecast(method="naive") %>%
+  autoplot() + ylab("Demand")
+```
+
+```{r, include=FALSE}
+fcast <- stlf(itemc, method='naive')
+fcast
+```
+
+
+
+```{r}
+#A_train <- window(itemA, start = c(2002,1), end = c(2016,12))
+#A_test <- window(itemA, start = c(2017,1))
+
+#B_train <- window(itemB, start = c(2002,1), end = c(2016,12))
+#B_test <- window(itemB, start = c(2017,1))
+```
+
+
+
+# 5. Stationarity of the residuals
+
+
+```{r, echo=TRUE}
+Box.test(remainder(itemA_decom), lag=10, type="Ljung")
+
+
+```
+
+```{r}
+#Acf(remainder(itemA_decom))
+```
+
+```{r, echo=TRUE}
+Box.test(remainder(itemB_decom), lag=10, type="Ljung")
+```
+
+```{r}
+cat("Item A residulas plots")
+```
+
+```{r}
+
+checkresiduals(remainder(itemA_decom))
+```
+
+```{r}
+cat("Item B residulas plots")
+```
+```{r}
+
+checkresiduals(remainder(itemB_decom))
+```
+
+#### Observation:
+* The ACF of the residuals of Item A looks just like that of a white noise series. There are no autocorrelations lying outside the 95% limits, and the Ljung-Box Q statistic has a p-value of 0.06311 for item A, but whereas it is not stationery for item B with p-value 0.01075. However at lag one both the series seems to be stationery
+* The residuals of Item A is normally distributed, though with extended tails and is stationary
+* The residuals of Item B is also normally distributed, but skewed to the right ans can be considered stationary as the lags in ACF are not significant
+* A more clear confirmation can be obtained usin the Dickey-Fuller test
+
+
+```{r}
+library(tseries)
+
+```
+
+```{r}
+adf.test(remainder(itemA_decom), k=10)
+```
+
+```{r}
+adf.test(remainder(itemB_decom), k=10)
+```
+
+#### Observation:
+* The H0: presence of a unit root; Ha: stationary series
+* The Dickey-Fuller test statistic is very low, providing us with a low p-value. We can likely reject the null hypothesis of the presence of a unit root and conclude that we have a stationary series for both the residuals of ItemA and ItemB
+
+
+# 6. Fitting the models on Train set and testing
+
+#### Train & Test split
+```{r, echo=TRUE}
+A_train <- window(itemA, start = c(2002,1), end = c(2015,9))
+A_test <- window(itemA, start = c(2015,10), end = c(2017,6))
+
+B_train <- window(itemB, start = c(2002,1), end = c(2015,9))
+B_test <- window(itemB, start = c(2015,10), end = c(2017,6))
+```
+
+```{r, echo=TRUE}
+fit1 <- hw(A_train,seasonal="multiplicative")
+autoplot(A_train) +
+  autolayer(A_test, series="Holdout", PI=FALSE) +
+  autolayer(fit1, series="HW multiplicative forecasts",
+    PI=FALSE) +
+  xlab("Year") +
+  ylab("Demand") +
+  ggtitle("Demand for Item A") +
+  guides(colour=guide_legend(title="Forecast"))
+```
+
+```{r}
+autoplot(fit1)
+```
+
+```{r, echo=TRUE}
+fit2 <- hw(B_train,seasonal="multiplicative")
+autoplot(B_train) +
+  autolayer(B_test, series="Item B holdout", PI=FALSE) +
+  autolayer(fit2, series="HW multiplicative forecasts",
+    PI=FALSE) +
+  xlab("Year") +
+  ylab("Demand") +
+  ggtitle("Demand for Item B") +
+  guides(colour=guide_legend(title="Forecast"))
+```
+
+```{r}
+autoplot(fit2)
+```
+
+#### Accuracy forecast of HW 
+```{r}
+A_fore <- forecast(fit1, h=21)
+B_fore <- forecast(fit2, h=21)
+```
+
+```{r}
+cat('Acutal Values for Item A series: \n\n')
+A_test
+cat('\n')
+cat('Forecasted Values : \n\n')
+A_fore
+```
+
+```{r}
+
+cat('Acutal Values for Item B series: \n\n')
+B_test
+cat('\n')
+cat('Forecasted Values : \n\n')
+B_fore
+```
+
+#### Smoothing parameters for Holt-Winters models
+* The Holt-Winters seasonal method comprises the forecast equation and three smoothing equations - one for the level Lt, one for the trend Bt, and one for the seasonal component St, with corresponding smoothing parameters alpha, beta and gamma. 
+* The small value of gamma for the multiplicative model means that the seasonal component hardly changes over time.
+
+
+```{r}
+cat('Exponential model for Item A: model information:\n\n')
+fit1$model
+```
+
+#### Observaton:
+* The smoothing parameters for Item A series are
+* alpha = 0.11, beta = 0.0025 and gamma = 1e-04
+
+```{r}
+
+```
+
+
+```{r}
+cat('Exponential model for Item B: model information:\n\n')
+fit2$model
+```
+
+#### Observaton:
+* The smoothing parameters for Item B series are
+* alpha = 0.0219, beta = 0.0013 and gamma = 1e-04
+
+#### Accuracy for the Holt-Winters models
+
+```{r}
+cat('MAPE for Item A for the fitted model:\n\n')
+accuracy(fit1)[5]
+```
+
+```{r}
+cat('MAPE for Item B for the fitted model:\n\n')
+accuracy(fit2)[5]
+
+```
+
+#### Accuracy for holdout data
+```{r, echo=TRUE}
+cat('Accuracy scores for the Item A: \n\n')
+accuracy(A_test, A_fore$mean)
+
+```
+
+```{r, echo=TRUE}
+cat('Accuracy scores for the Item B: \n\n')
+accuracy(B_test, B_fore$mean)
+
+```
+
+# 7. Forecasting for July 2017 to December 2018
+```{r, echo=TRUE}
+fit1 <- hw(itemA,seasonal="multiplicative")
+fit2 <- hw(itemB,seasonal="multiplicative")
+```
+
+```{r, echo=TRUE}
+A_forecast <- forecast(fit1, h=17)
+B_forecast <- forecast(fit2, h=17)
+
+```
+
+
+```{r}
+cat('Forecasted value for Item A: July 2017 to December 2018: \n\n')
+A_forecast
+```
+
+```{r}
+cat('Forecasted value for Item B: July 2017 to December 2018: \n\n')
+B_forecast
+```
+
+
+# 8. Conclusion
+* The forecast will be used to plan and set the goal which will align with the forecast and if possbile will try to identify additional insights which will substantiate the forecast. Based on the accuracy received on the holdout set, the forecast will moderately for Item A and to some extent closely for Item B shadow the actual observation in the future for the forecasted period.
+* In addition to taking into account the past demand, lead time and planned advertising and other marketing activity will also be incorporated into forecast horizon to make decisions in real suituation which would have an impact on the stading of the business

@@ -1,0 +1,1290 @@
+---
+output:
+  pdf_document:
+      latex_engine: xelatex
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, comment = "")
+#options(warn = -1)
+
+setwd("C:/Users/Mease/Desktop/Machine_Learning/GL_BACP/Module V/Assignment")
+```
+
+
+```{r author, echo=FALSE, fig.cap="", out.width = '100%', fig.align='center'}
+knitr::include_graphics("author_1.png")
+```
+
+```{r toc, echo=FALSE, fig.cap="", out.width = '100%', fig.align='center'}
+knitr::include_graphics("toc_1.png")
+```
+#Contents
+####1. Project Objective   
+
+####2. Data description and summary
+#####+ 2.1. Data description
+#####+ 2.2. Data Summary
+
+####3. Data wrangling and Data selection
+
+####4. Dataset with most revelant features 
+
+####5. Exploratory Data Analysis
+
+
+####6. Training classification models
+#####+ 6.1 Goa state Election results Model
+#####+ 6.2 Punjab state Election results Model
+#####+ 6.3 Uttar Pradesh state Election results Model
+
+
+
+####7. Project Conclusion
+
+```{r, results='asis', eval=(knitr::opts_knit$get('rmarkdown.pandoc.to') == 'latex')}
+cat('\\pagebreak')
+```
+
+# 1. Project objective
+* The objective is analyse the previous State Legislative Assembly Election results to find the important factors which influences the prospective of a Candidate to win the poll.
+* Collect data from Election commision of India, MyNeta.com and other resources, perform data wrangling to create a good dataset with relevant features which will aid in identifying the important factors which contribute towards a contesting candidates chances to win the election poll.
+
+
+```{r}
+library(readxl, warn.conflicts = FALSE, quietly = TRUE)
+library(dplyr, warn.conflicts = FALSE, quietly = TRUE)
+#library(rvest)
+library(stringr, warn.conflicts = FALSE, quietly = TRUE)
+library(readr, warn.conflicts = FALSE, quietly = TRUE)
+library(ggplot2, warn.conflicts = FALSE, quietly = TRUE)
+```
+
+
+# 2. Data description and summary
+```{r}
+AE17 <- read_xls('LA 2017.xls', sheet = 1)
+Electors17 <- read_xls('LA 2017.xls', sheet = 2)
+```
+
+```{r}
+#head(AE17)
+```
+
+```{r}
+#head(Electors17)
+```
+
+### Removing NOTA observations
+```{r, echo = TRUE}
+T17 <- AE17 %>% filter(PARTYABBRE!='NOTA')
+head(T17)
+```
+
+#### Observation:
+* The data has been filtered to include only the candidates information, excluding the NOTA observation which doesn't represent any contesting candidate.
+
+```{r}
+#str(T17)
+#class(unique(T17$ST_NAME))
+#colnames(T17)
+```
+
+### Summary of 2017 MLA election dataset
+```{r}
+con_fac <- list('ST_NAME','DIST_NAME','AC_NAME','AC_TYPE','CAND_SEX','CAND_CATEGORY','PARTYABBRE')
+T17$ST_NAME <- as.factor(T17$ST_NAME)
+T17$DIST_NAME <- as.factor(T17$DIST_NAME)
+T17$AC_NAME <- as.factor(T17$AC_NAME)
+T17$AC_TYPE <- as.factor(T17$AC_TYPE)
+T17$CAND_SEX <- as.factor(T17$CAND_SEX)
+T17$CAND_CATEGORY <- as.factor(T17$CAND_CATEGORY)
+T17$PARTYABBRE <- as.factor(T17$PARTYABBRE)
+T17$CAND_AGE <- as.numeric(T17$CAND_AGE)
+summary(T17)
+```
+
+```{r, eval=FALSE}
+#tab <- h %>% html_nodes("table") 
+#tab <- tab[[2]] %>% 
+#	html_table
+```
+
+
+```{r}
+can_data_goa <- read_xls("candidate_data_17.xls", sheet = 'Goa')
+can_data_punjab <- read_xls("candidate_data_17.xls", sheet = 'Punjab')
+can_data_uttarakhand <- read_xls("candidate_data_17.xls", sheet = 'Uttarakhand')
+can_data_manipur <- read_xls("candidate_data_17.xls", sheet = 'Manipur')
+can_data_up <- read_xls("candidate_data_17.xls", sheet = 'Uttar_Pradesh')
+
+```
+
+# 3. Data Wrangling and Data selection
+
+* Since the project involved to collect the data unlike other projects, which is most often will be the case when working in real time, have walked through all the steps which was followed to prepare the data for training the models. 
+* The data collection part being the most time consuming task and is considered one of defining task in performing data analysis which results in direct success of the analysis
+
+## 3.1 Data extraction and conversion  
+```{r}
+can_data_goa$Total_Assets <- parse_number(can_data_goa$`Total Assets`)
+can_data_punjab$Total_Assets <- parse_number(can_data_punjab$`Total Assets`)
+can_data_uttarakhand$Total_Assets <- parse_number(can_data_uttarakhand$`Total Assets`)
+can_data_up$Total_Assets <- parse_number(can_data_up$`Total Assets`)
+can_data_manipur$Total_Assets <- parse_number(can_data_manipur$`Total Assets`)
+
+can_data_goa$Liabilities_P <- parse_number(can_data_goa$Liabilities)
+can_data_punjab$Liabilities_P <- parse_number(can_data_punjab$Liabilities)
+can_data_uttarakhand$Liabilities_P <- parse_number(can_data_uttarakhand$Liabilities)
+can_data_up$Liabilities_P <- parse_number(can_data_up$Liabilities)
+can_data_manipur$Liabilities_P <- parse_number(can_data_manipur$Liabilities)
+
+#head(can_data_goa)
+```
+
+#### Observation:
+* The Goa sates Vidhan Sabha election results will be used to explain the process used to collect the data. And the same process have been applied to collect the data for the remaining states.
+
+```{r}
+col <- c("Sno","CAND_NAME","Constituency","Party","Criminal Case","Education","Total Assets","Liabilities","Total_Assets","Liabilities_P")
+colnames(can_data_goa) <- c(col)
+colnames(can_data_manipur) <- c(col)
+colnames(can_data_punjab) <- c(col)
+colnames(can_data_up) <- c(col)
+colnames(can_data_uttarakhand) <- c(col)
+
+```
+
+### converting the text data to perform joins
+```{r, echo = TRUE}
+can_data_goa$CAND_NAME <- sapply(can_data_goa$CAND_NAME, toupper)
+can_data_manipur$CAND_NAME <- sapply(can_data_manipur$CAND_NAME, toupper)
+can_data_punjab$CAND_NAME <- sapply(can_data_punjab$CAND_NAME, toupper)
+can_data_up$CAND_NAME <- sapply(can_data_up$CAND_NAME, toupper)
+can_data_uttarakhand$CAND_NAME <- sapply(can_data_uttarakhand$CAND_NAME, toupper)
+```
+
+
+### Subsetting data based on State
+```{r, echo = TRUE}
+G17 <- T17 %>% filter(ST_NAME=='Goa')
+P17 <- T17 %>% filter(ST_NAME=='Punjab')
+M17 <- T17 %>% filter(ST_NAME=='Manipur')
+UP17 <- T17 %>% filter(ST_NAME=='Uttar Pradesh')
+UKD17 <- T17 %>% filter(ST_NAME=='Uttarakhand')
+
+```
+
+
+### Performing joins to include more features
+```{r, echo = TRUE}
+P17 <- P17 %>% left_join(can_data_punjab)
+G17 <- G17 %>% left_join(can_data_goa)
+M17 <- M17 %>% left_join(can_data_manipur)
+UP17 <- UP17 %>% left_join(can_data_up)
+UKD17 <- UKD17 %>% left_join(can_data_uttarakhand)
+```
+
+### Choosing Goa state to perform isolated analysis
+```{r, include= TRUE}
+G17 <- G17 %>% left_join(Electors17[,c('AC_NAME',"TOTAL VOTES POLLED","TotalElectors")])
+
+```
+
+
+### Missing values present in data
+```{r, echo=TRUE}
+for (col in colnames(G17)){
+  cat(col,': ',sum(is.na(G17[,col])))
+  cat( '\n')
+}
+```
+
+#### Observaton:
+* The data set has few missing values which will be filled using revelant method based on the type of parameter
+
+### Dataset with added Features
+```{r}
+colnames(G17)
+```
+
+#### Observation:
+* The features in the data set after initial data wrangling
+
+```{r}
+
+#data <- T17
+#data <- data %>% left_join(can_data_goa)
+#data <- data %>% left_join(can_data_punjab)
+#data <- data %>% left_join(can_data_manipur)
+#data <- data %>% left_join(can_data_goa)
+#data <- data %>% left_join(can_data_goa)
+
+#head(data)
+#View(P17)
+```
+
+```{r}
+#tidy_data <- data %>% filter(Party %in% c(----)) %>%
+#	 select(country, year, fertility) %>%
+#	ggplot(aes(year, fertility, color=country)) + geom_point()
+
+
+
+#FEATURES: winners(Grad&above), corepati_winners, winners_filed_ITR, winners_election_expences, position_previous_election, re-contesting_candidates
+```
+
+```{r}
+recon_Goa <- read_xls("re_contesting.xls", sheet = 'Goa')
+recon_Punj <- read_xls("re_contesting.xls", sheet = 'Punjab')
+recon_Manipur <- read_xls("re_contesting.xls", sheet = 'Manipur')
+recon_UP <- read_xls("re_contesting.xls", sheet = 'Uttar Pradesh')
+recon_UKD <- read_xls("re_contesting.xls", sheet = 'Uttarakhand')
+```
+
+### The data of recontesting candidates
+```{r, echo=TRUE}
+head(recon_Goa[,c(2,3)])
+```
+
+
+```{r}
+
+#recon_Goa %>%
+#  mutate(CAND_NAME = purrr::map_chr(
+#    stringr::str_split(`Name (Party)`, pattern = "[(^[()]]"), 
+#    ~ paste(unique(.x), collapse = " ")
+#    ))
+```
+
+### Performing data cleaning for Candidate name 
+```{r, echo = TRUE}
+recon_Goa <- recon_Goa %>%
+  mutate(CAND_NAME = purrr::map_chr(
+    stringr::str_replace(`Name (Party)`, " \\(.*\\)", ""),
+    ~ paste(toupper(.))
+    ))
+
+head(recon_Goa$CAND_NAME)
+```
+
+#### Observation:
+* The recontesting data includes the names of all the contesting candidates who have been elected in the previous election, however the Candidate name has party name in the brackets which needs to be separated before joining based on the candidate name with main dataset.
+
+
+```{r}
+recon_Goa$Recontesting <- 1
+recon_Goa$Changed_party <- as.integer(!is.na(recon_Goa$Remarks))
+colnames(recon_Goa) <- c("Sno","Name (Party)","Total Assets in Goa 2017","Total Assets in Goa 2012","Asset Increase","Increase_in_Asset_percentage","Remarks","CAND_NAME","Recontesting","Changed_party"  )
+```
+
+### Performing join to include recontesting feature
+```{r, echo = TRUE}
+recon_Goa <- recon_Goa[,c("CAND_NAME","Recontesting")]
+G17 <- G17 %>% left_join(recon_Goa)
+```
+
+
+```{r}
+#recon_Punj <- recon_Punj %>%
+#  mutate(CAND_NAME = purrr::map_chr(
+#    stringr::str_replace(`Name (Party)`, " \\(.*\\)", ""),
+#    ~ paste(toupper(.))
+#    ))
+
+#recon_Punj$Recontesting <- 1
+#recon_Punj$Changed_party <- as.integer(!is.na(recon_Punj$Remarks))
+#colnames(recon_Punj) <- c("Sno","Name (Party)","Total Assets in Goa 2017","Total Assets in Goa 2012","Asset Increase","Increase_in_Asset_percentage","Remarks","CAND_NAME","Recontesting","Changed_party"  )
+
+#recon_Goa <- recon_Goa[,c("CAND_NAME", "Increase_in_Asset_percentage","Recontesting","Changed_party")]
+#P17 <- P17 %>% left_join(recon_Punj[,c("CAND_NAME", "Recontesting")])
+
+#head(P17)
+```
+
+
+```{r}
+Goa_can_corepathi <- read_xls('Goa_cand_status.xls', sheet = 'Corepathi')
+Goa_can_graduate_above <- read_xls('Goa_cand_status.xls', sheet = 'Graduates_above')
+Goa_can_filed_ITR <- read_xls('Goa_cand_status.xls', sheet = 'Filed_ITR')
+Goa_winner_corepathi <- read_xls('Goa_cand_status.xls', sheet = 'Winner_corepathi')
+Goa_winner_graduate_above <- read_xls('Goa_cand_status.xls', sheet = 'Winner_graduate_above')
+Goa_winner_filed_ITR <- read_xls('Goa_cand_status.xls', sheet = 'Winner_filed_ITR')
+Goa_can_corepathi$Cand_corepathi <- 1
+Goa_can_graduate_above$Cand_graduate_above <- 1
+Goa_can_filed_ITR$Cand_filed_ITR <- 1
+Goa_winner_corepathi$Winner_corepathi <- 1
+Goa_winner_graduate_above$Winner_graduate_above <- 1
+Goa_winner_filed_ITR$Winner_filed_ITR <- 1
+```
+
+### Adding features: corepathi, education level, ITR status
+```{r, echo = TRUE}
+Goa_winner_corepathi$CAND_NAME <- sapply(Goa_winner_corepathi$CAND_NAME, toupper)
+Goa_winner_graduate_above$CAND_NAME <- sapply(Goa_winner_graduate_above$CAND_NAME, toupper)
+Goa_winner_filed_ITR$CAND_NAME <- sapply(Goa_winner_filed_ITR$CAND_NAME, toupper)
+Goa_can_corepathi$CAND_NAME <- sapply(Goa_can_corepathi$CAND_NAME, toupper)
+Goa_can_graduate_above$CAND_NAME <- sapply(Goa_can_graduate_above$CAND_NAME, toupper)
+Goa_can_filed_ITR$CAND_NAME <- sapply(Goa_can_filed_ITR$CAND_NAME, toupper)
+
+G17 <- G17 %>% left_join(Goa_winner_corepathi[,c('CAND_NAME','Winner_corepathi')])
+G17 <- G17 %>% left_join(Goa_winner_graduate_above[,c('CAND_NAME','Winner_graduate_above')])
+G17 <- G17 %>% left_join(Goa_winner_filed_ITR[,c('CAND_NAME','Winner_filed_ITR')])
+G17 <- G17 %>% left_join(Goa_can_corepathi[,c('CAND_NAME','Cand_corepathi')])
+G17 <- G17 %>% left_join(Goa_can_graduate_above[,c('CAND_NAME','Cand_graduate_above')])
+G17 <- G17 %>% left_join(Goa_can_filed_ITR[,c('CAND_NAME','Cand_filed_ITR')])
+```
+
+
+
+### Correcting errors and adding National party indicator
+```{r, echo = TRUE}
+# replacing mis-spelled party abbrevation
+G17$PARTYABBRE<- str_replace(G17$PARTYABBRE,'AAAP','AAP')
+
+National_parties <- c('BJP', 'BSP', 'INC', 'NCP', 'CPI', 'CPI-M', 'AAP', 'RJD', 'SP', 'AITC')
+
+C_r1 <- function(x){
+  if (x %in% National_parties){
+      return(1)
+  }
+  
+  else{
+    return(0)
+  }
+}  
+
+
+G17$National_party_candidate <- sapply(G17$PARTYABBRE, C_r1)
+
+
+```
+
+```{r}
+#str(G17)
+
+```
+
+### Total Variables after Data Wrangling 
+```{r}
+colnames(G17)
+```
+
+#### Observation:
+* The total feature set after the data wrangling process which will subset based on important feature that can be used for the creating model.
+
+# 4. Dataset with most revelant features
+```{r}
+GW17 <- G17[,c("DIST_NAME","AC_NAME","AC_TYPE","CAND_NAME","POSITION","CAND_SEX","CAND_CATEGORY","CAND_AGE","PARTYABBRE","TOTALVALIDVOTESPOLLED","TOTAL VOTES POLLED","TotalElectors","Criminal Case","Education","Total_Assets","Liabilities_P","Recontesting","National_party_candidate","Winner_corepathi","Winner_graduate_above","Winner_filed_ITR","Cand_corepathi","Cand_graduate_above","Cand_filed_ITR")]
+
+```
+
+### Dataset information
+```{r}
+GW17$Education <- as.factor(GW17$Education)
+str(GW17)
+```
+
+### Identifying NA's in the dataset and imputation
+```{r}
+for (col in colnames(GW17)){
+  cat(col,': ',sum(is.na(GW17[,col])))
+  cat( '\n')
+}
+
+```
+
+```{r}
+#write.csv(GW17, file = "Goa_wragnled_data_17.csv", row.names = FALSE)
+#GW17 <- read.csv('Goa_wragnled_data_17.csv')
+```
+
+```{r}
+
+summary(GW17$Education)
+```
+
+### Filling NA' in Education feature
+```{r, echo = TRUE}
+GW17$Education <- as.factor(GW17$Education)
+GW17$Education[is.na(GW17$Education)] <- '10th Pass'
+
+summary(GW17$Education)
+```
+
+#### Observation:
+* Since 10th pass has more number of count using the mode method to impute the missing values in the education
+
+
+### Imputing Total Assets and Liability feature
+
+#### Summary of Total Assets variable
+```{r}
+summary(GW17$Total_Assets)
+```
+
+```{r}
+hist(GW17$Total_Assets)
+
+```
+
+```{r, echo=TRUE}
+head(subset(GW17, GW17$National_party_candidate == 1 & is.na(GW17$Total_Assets))[,c('CAND_NAME','PARTYABBRE')],9)
+```
+
+#### Observatoin:
+* The Assets has very huge outliers which are effecting the mean of the feature, so using the mean value would not be ideal, but since also the candidates who have missing assets belong to national candidate who are most likely to rich than the non_national party candidate then using a value between the median and mean, average of the two, would be considred to impute the missing values. 
+
+### Choosing dataset below the median
+```{r, echo = TRUE}
+TA_impute <- subset(GW17$Total_Assets, GW17$Total_Assets<=18431376)
+
+hist(TA_impute)
+
+```
+
+
+
+#### Observation:
+* The data is more observations below the median as expected for Total assets
+
+#### Summary after threshold selecting
+```{r}
+summary(TA_impute)
+```
+
+### Imputing Total Assets 
+```{r, echo = TRUE}
+GW17$Total_Assets[is.na(GW17$Total_Assets)] <- 34190676
+summary(GW17$Total_Assets)
+```
+
+#### Observation:
+* The summary of the Total_assets after imputation
+
+
+### Summary and Distribution of Liability
+```{r}
+summary(GW17$Liabilities_P)
+```
+
+
+
+```{r}
+hist(GW17$Liabilities_P)
+```
+
+
+### Distribution below the median value
+```{r, echo = TRUE}
+Lia_impute <- subset(GW17$Liabilities_P, GW17$Liabilities_P<=1388206)
+hist(Lia_impute)
+```
+
+### Imputing Liability
+```{r}
+summary(Lia_impute)
+```
+#### Observation:
+* The Liability has more observation with 0 values, that less likely that candidate would have any liability, so imputing liability with zero value would be good.
+
+```{r, echo = TRUE}
+GW17$Liabilities_P[is.na(GW17$Liabilities_P)] <- 0
+summary(GW17$Liabilities_P)
+```
+
+### Checking for negative Wealth
+```{r, echo = TRUE}
+
+subset(GW17[,c('Total_Assets','Liabilities_P')], (GW17$Total_Assets - GW17$Liabilities_P)<0)
+```
+
+#### Observation:
+* The check for negative values, means candidate who have debt is less few, and these negative values has not been introduced by the imputation steps, which refelects the actual financial status of the candidates
+
+
+
+### Candidates count from each party
+```{r}
+GW17$PARTYABBRE <- as.factor(GW17$PARTYABBRE)
+summary(GW17$PARTYABBRE)
+```
+
+
+### Imputing NA's in numeric features
+```{r, echo = TRUE}
+GW17 <- GW17 %>% mutate_if(is.numeric, funs(replace(., is.na(.), 0)))
+
+summary(GW17)
+```
+
+#### Observation:
+* The summary of the data after data wrangling and imputation steps
+
+### Count of NA's after Imputation
+```{r, echo = TRUE}
+for (col in colnames(GW17)){
+  cat(col,': ',sum(is.na(GW17[,col])))
+  cat( '\n')
+}
+```
+
+#### Observation:
+* The missing has been imputated and the data contains no missing values.
+
+```{r}
+GW17$PARTYABBRE<- str_replace(GW17$PARTYABBRE,'AAAP','AAP')
+```
+
+```{r}
+#write.csv(GW17, 'Goa_Wrangled.csv', row.names = FALSE)
+GW17 <- read.csv('Goa_Wrangled_data_4.csv')
+#View(GW17)
+```
+
+```{r, eval=FALSE}
+P17 <- P17 %>% left_join(Electors17[,c('AC_NAME',"TOTAL VOTES POLLED","TotalElectors")])
+
+recon_Punj <- recon_Punj %>%
+  mutate(CAND_NAME = purrr::map_chr(
+    stringr::str_replace(`Name (Party)`, " \\(.*\\)", ""),
+    ~ paste(toupper(.))
+    ))
+
+recon_Punj$Recontesting <- 1
+recon_Punj$Changed_party <- as.integer(!is.na(recon_Punj$Remarks))
+colnames(recon_Punj) <- c("Sno","Name (Party)","Total Assets in Goa 2017","Total Assets in Goa 2012","Asset Increase","Increase_in_Asset_percentage","Remarks","CAND_NAME","Recontesting","Changed_party"  )
+
+#recon_Goa <- recon_Goa[,c("CAND_NAME", "Increase_in_Asset_percentage","Recontesting","Changed_party")]
+P17 <- P17 %>% left_join(recon_Punj[,c("CAND_NAME", "Recontesting")])
+
+Punjab_can_corepathi <- read_xls('Punjab_cand_status.xls', sheet = 'Corepathi')
+Punjab_can_graduate_above <- read_xls('Punjab_cand_status.xls', sheet = 'Graduate_above')
+Punjab_can_filed_ITR <- read_xls('Punjab_cand_status.xls', sheet = 'Filed_ITR')
+Punjab_winner_corepathi <- read_xls('Punjab_cand_status.xls', sheet = 'Winner_corepathi')
+Punjab_winner_graduate_above <- read_xls('Punjab_cand_status.xls', sheet = 'Winner_graduate_above')
+Punjab_winner_filed_ITR <- read_xls('Punjab_cand_status.xls', sheet = 'Winner_filed_ITR')
+Punjab_can_corepathi$Cand_corepathi <- 1
+Punjab_can_graduate_above$Cand_graduate_above <- 1
+Punjab_can_filed_ITR$Cand_filed_ITR <- 1
+Punjab_winner_corepathi$Winner_corepathi <- 1
+Punjab_winner_graduate_above$Winner_graduate_above <- 1
+Punjab_winner_filed_ITR$Winner_filed_ITR <- 1
+
+Punjab_winner_corepathi$CAND_NAME <- sapply(Punjab_winner_corepathi$CAND_NAME, toupper)
+Punjab_winner_graduate_above$CAND_NAME <- sapply(Punjab_winner_graduate_above$CAND_NAME, toupper)
+Punjab_winner_filed_ITR$CAND_NAME <- sapply(Punjab_winner_filed_ITR$CAND_NAME, toupper)
+Punjab_can_corepathi$CAND_NAME <- sapply(Punjab_can_corepathi$CAND_NAME, toupper)
+Punjab_can_graduate_above$CAND_NAME <- sapply(Punjab_can_graduate_above$CAND_NAME, toupper)
+Punjab_can_filed_ITR$CAND_NAME <- sapply(Punjab_can_filed_ITR$CAND_NAME, toupper)
+
+P17 <- P17 %>% left_join(Punjab_winner_corepathi[,c('CAND_NAME','Winner_corepathi')])
+P17 <- P17 %>% left_join(Punjab_winner_graduate_above[,c('CAND_NAME','Winner_graduate_above')])
+P17 <- P17 %>% left_join(Punjab_winner_filed_ITR[,c('CAND_NAME','Winner_filed_ITR')])
+P17 <- P17 %>% left_join(Punjab_can_corepathi[,c('CAND_NAME','Cand_corepathi')])
+P17 <- P17 %>% left_join(Punjab_can_graduate_above[,c('CAND_NAME','Cand_graduate_above')])
+P17 <- P17 %>% left_join(Punjab_can_filed_ITR[,c('CAND_NAME','Cand_filed_ITR')])
+
+National_parties <- c('BJP', 'BSP', 'INC', 'NCP', 'CPI', 'CPI-M', 'AAAP', 'RJD', 'SP', 'AITC')
+P17$National_party_candidate <- sapply(P17$PARTYABBRE, C_r1)
+
+#PW17 <- P17[,c("DIST_NAME","AC_NAME","AC_TYPE","CAND_NAME","POSITION","CAND_SEX","CAND_CATEGORY","CAND_AGE","PARTYABBRE","TOTALVALIDVOTESPOLLED","TOTAL VOTES POLLED","TotalElectors","Criminal Case","Education","Total_Assets","Liabilities_P","Recontesting","National_party_candidate","Winner_corepathi","Winner_graduate_above","Winner_filed_ITR","Cand_corepathi","Cand_graduate_above","Cand_filed_ITR")]
+#View(P17[!duplicated(P17$CAND_NAME),])
+PW17 <- P17[!duplicated(P17$CAND_NAME),]
+
+PW17$Education <- as.factor(PW17$Education)
+PW17$Education[is.na(PW17$Education)] <- '10th Pass'
+
+PW17$Total_Assets[is.na(PW17$Total_Assets)] <- median(PW17$Total_Assets)
+
+PW17$Liabilities_P[is.na(PW17$Liabilities_P)] <- 0
+
+PW17 <- PW17 %>% mutate_if(is.numeric, funs(replace(., is.na(.), 0)))
+
+for (col in colnames(PW17)){
+  cat(col,': ',sum(is.na(PW17[,col])))
+  cat( '\n')
+}
+
+PW17 <- PW17[,c("DIST_NAME","AC_NAME","AC_TYPE","CAND_NAME","POSITION","CAND_SEX","CAND_CATEGORY","CAND_AGE","PARTYABBRE","TOTALVALIDVOTESPOLLED","TOTAL VOTES POLLED","TotalElectors","Criminal Case","Education","Total_Assets","Liabilities_P","Recontesting","National_party_candidate","Winner_corepathi","Winner_graduate_above","Winner_filed_ITR","Cand_corepathi","Cand_graduate_above","Cand_filed_ITR")]
+
+#write.csv(x = PW17, 'Punjab_wrangled_data.csv', row.names = FALSE)
+```
+
+
+```{r, eval= FALSE}
+UP17 <- UP17 %>% left_join(Electors17[,c('AC_NAME',"TOTAL VOTES POLLED","TotalElectors")])
+
+recon_UP <- recon_UP %>%
+  mutate(CAND_NAME = purrr::map_chr(
+    stringr::str_replace(`Name (Party)`, " \\(.*\\)", ""),
+    ~ paste(toupper(.))
+    ))
+
+recon_UP$Recontesting <- 1
+#recon_UP$Changed_party <- as.integer(!is.na(recon_Punj$Remarks))
+#colnames(recon_UP) <- c("Sno","Name (Party)","Total Assets in Goa 2017","Total Assets in Goa 2012","Asset Increase","Increase_in_Asset_percentage","Remarks","CAND_NAME","Recontesting","Changed_party"  )
+
+#recon_Goa <- recon_Goa[,c("CAND_NAME", "Increase_in_Asset_percentage","Recontesting","Changed_party")]
+UP17 <- UP17 %>% left_join(recon_UP[,c("CAND_NAME", "Recontesting")])
+
+UP_can_corepathi <- read_xls('UP_cand_status.xls', sheet = 'Corepathi')
+UP_can_graduate_above <- read_xls('UP_cand_status.xls', sheet = 'Graduate_above')
+UP_can_filed_ITR <- read_xls('UP_cand_status.xls', sheet = 'Filed_ITR')
+UP_winner_corepathi <- read_xls('UP_cand_status.xls', sheet = 'Winner_corepathi')
+UP_winner_graduate_above <- read_xls('UP_cand_status.xls', sheet = 'Winner_graduate_above')
+UP_winner_filed_ITR <- read_xls('UP_cand_status.xls', sheet = 'Winner_filed_ITR')
+UP_can_corepathi$Cand_corepathi <- 1
+UP_can_graduate_above$Cand_graduate_above <- 1
+UP_can_filed_ITR$Cand_filed_ITR <- 1
+UP_winner_corepathi$Winner_corepathi <- 1
+UP_winner_graduate_above$Winner_graduate_above <- 1
+UP_winner_filed_ITR$Winner_filed_ITR <- 1
+
+UP_winner_corepathi$CAND_NAME <- sapply(UP_winner_corepathi$CAND_NAME, toupper)
+UP_winner_graduate_above$CAND_NAME <- sapply(UP_winner_graduate_above$CAND_NAME, toupper)
+UP_winner_filed_ITR$CAND_NAME <- sapply(UP_winner_filed_ITR$CAND_NAME, toupper)
+UP_can_corepathi$CAND_NAME <- sapply(UP_can_corepathi$CAND_NAME, toupper)
+UP_can_graduate_above$CAND_NAME <- sapply(UP_can_graduate_above$CAND_NAME, toupper)
+UP_can_filed_ITR$CAND_NAME <- sapply(UP_can_filed_ITR$CAND_NAME, toupper)
+
+UP17 <- UP17 %>% left_join(UP_winner_corepathi[,c('CAND_NAME','Winner_corepathi')])
+UP17 <- UP17 %>% left_join(UP_winner_graduate_above[,c('CAND_NAME','Winner_graduate_above')])
+UP17 <- UP17 %>% left_join(UP_winner_filed_ITR[,c('CAND_NAME','Winner_filed_ITR')])
+UP17 <- UP17 %>% left_join(UP_can_corepathi[,c('CAND_NAME','Cand_corepathi')])
+UP17 <- UP17 %>% left_join(UP_can_graduate_above[,c('CAND_NAME','Cand_graduate_above')])
+UP17 <- UP17 %>% left_join(UP_can_filed_ITR[,c('CAND_NAME','Cand_filed_ITR')])
+
+UP17$National_party_candidate <- sapply(UP17$PARTYABBRE, C_r1)
+
+#PW17 <- P17[,c("DIST_NAME","AC_NAME","AC_TYPE","CAND_NAME","POSITION","CAND_SEX","CAND_CATEGORY","CAND_AGE","PARTYABBRE","TOTALVALIDVOTESPOLLED","TOTAL VOTES POLLED","TotalElectors","Criminal Case","Education","Total_Assets","Liabilities_P","Recontesting","National_party_candidate","Winner_corepathi","Winner_graduate_above","Winner_filed_ITR","Cand_corepathi","Cand_graduate_above","Cand_filed_ITR")]
+#UPW17 <- UP17
+UPW17 <- UP17[!duplicated(UP17$CAND_NAME),]
+
+UPW17$Education <- as.factor(UPW17$Education)
+UPW17$Education[is.na(UPW17$Education)] <- '10th Pass'
+
+UPW17$Total_Assets[is.na(UPW17$Total_Assets)] <- median(UPW17$Total_Assets)
+
+UPW17$Liabilities_P[is.na(UPW17$Liabilities_P)] <- 0
+
+UPW17 <- UPW17 %>% mutate_if(is.numeric, funs(replace(., is.na(.), 0)))
+
+for (col in colnames(UPW17)){
+  cat(col,': ',sum(is.na(UPW17[,col])))
+  cat( '\n')
+}
+
+UPW17 <- UPW17[,c("DIST_NAME","AC_NAME","AC_TYPE","CAND_NAME","POSITION","CAND_SEX","CAND_CATEGORY","CAND_AGE","PARTYABBRE","TOTALVALIDVOTESPOLLED","TOTAL VOTES POLLED","TotalElectors","Criminal Case","Education","Total_Assets","Liabilities_P","Recontesting","National_party_candidate","Winner_corepathi","Winner_graduate_above","Winner_filed_ITR","Cand_corepathi","Cand_graduate_above","Cand_filed_ITR")]
+
+#write.csv(UPW17, 'UP_wrangled_data.csv', row.names = FALSE)
+#View(UPW17)
+```
+
+
+# 5. Exploratory Data Analysis
+
+### Count of the candidates from different parties by Position
+
+```{r}
+
+#ggplot(subset(GW17, GW17$POSITION <=8), aes(POSITION, ..count..)) + geom_bar(aes(fill=PARTYABBRE)) 
+plt <- GW17
+plt$POSITION <- as.factor(plt$POSITION)
+ggplot(plt, aes(PARTYABBRE, ..count..)) + geom_bar(aes(fill=POSITION)) + ggtitle('Count of the candidates from different parties by Position')
+```
+
+#### Observation:
+* The dataset contains more observation pertaining to the independent candidates, and who seem to have very less of them to have won the elections, and relatively other party candidates have more observation but have less winner count also belong to regional parties.
+
+```{r}
+plt <- subset(GW17, GW17$POSITION<=8)
+plt$POSITION <- as.factor(plt$POSITION)
+ggplot(plt, aes(PARTYABBRE,..count..)) + geom_bar(aes(fill=POSITION)) + ggtitle('Count of the candidates from different parties by Position (upto 8th)')
+  
+  #geom_text(stat='count', aes(label=..count..), vjust=-1)
+```
+
+#### Observation:
+* The data only using the candidates who have secured a position of 8 or above, still has more candidates from independent group.
+
+```{r}
+plt <- subset(GW17, GW17$POSITION<=5)
+plt$POSITION <- as.factor(plt$POSITION)
+ggplot(plt, aes(PARTYABBRE,..count..)) + geom_bar(aes(fill=POSITION))  + ggtitle('Count of the candidates from different parties by Position (upto 5th)')
+  
+```
+
+#### Observation:
+* The data only having candidates who have secured 5th position or above would be ideal, which would also closely target small group to make the data set to reflect those features more who have done fairly well, and by excluding higher position observations provides fewer groups for the model to classify
+
+### Count for other features by Position
+```{r}
+plt$Recontesting <- as.factor(plt$Recontesting)
+ggplot(plt, aes(Recontesting,..count..)) + geom_bar(aes(fill=POSITION)) + ggtitle('Recontesting Candidates count plot')
+```
+
+#### Observation:
+* Mostly all of the candidates have recontested and close to half of them have been re-elected.
+
+```{r}
+ggplot(plt, aes(Education,..count..)) + geom_bar(aes(fill=POSITION)) + ggtitle('Education level of Candidates count plot')
+```
+
+#### Observation:
+* Without performing any data imputation the Goa state didn't have any candidate who were illiterate, and it might not be true with other states which might also have candidates who have not done some education. As Goa has a literacy rate of 88.70% and male literacy rate of 92.65% and female literacy rate of 84.66% as per 2011 population census
+
+
+```{r}
+age_cat <- function(x){
+  if (x <=35){
+      return("Below_36")
+  }
+  if((x<=45) & (x > 35)){
+    return("Between_36_45")
+  }
+  if((x<=55) & (x > 45)){
+    return("Between_46_55")
+  }
+  else{
+    return("Above_55")
+  }
+} 
+
+plt$Age_category <- sapply(plt$CAND_AGE, age_cat)
+
+ggplot(plt, aes(Age_category,..count..)) + geom_bar(aes(fill=POSITION)) + ggtitle('Candidates count plot as per age category')
+```
+
+#### Observation:
+* The age seems to play a significant role, considering young candidates have not been able to win and data has more observation belonging to candidates who are above 45 more than half of the other two age category.
+
+
+```{r}
+plt$Cand_corepathi <- as.factor(plt$Cand_corepathi)
+ggplot(plt, aes(Cand_corepathi,..count..)) + geom_bar(aes(fill=POSITION)) + ggtitle('Corepathi Candidates count plot')
+
+```
+
+#### Observation:
+* The candidate who are rich have done well in the elections, eventhough candidates who are not corepathis have won but those who have got lower position in more than compared to candidates who have more observations who have atleast managed to secure 2nd position. The corepathis candidates has fewer observations beloning to 5th position and would have been even less if all the postion would have considered.
+
+```{r}
+plt$Cand_graduate_above <- as.factor(plt$Cand_graduate_above)
+ggplot(plt, aes(Cand_graduate_above,..count..)) + geom_bar(aes(fill=POSITION)) + ggtitle('Education level of Candidates count plot')
+
+```
+
+#### Observation:
+* Candidate having education level of Graduation/above might not be able to distinguish winning capacity of a candidate, as it seem to be equally likely
+
+
+```{r}
+plt$Cand_filed_ITR <- as.factor(plt$Cand_filed_ITR)
+ggplot(plt, aes(Cand_filed_ITR,..count..)) + geom_bar(aes(fill=POSITION)) + ggtitle('ITR filing status of Candidates count plot')
+
+```
+
+#### Observation:
+* This is an invisible characteristic of a candidate, unlike the corepathi, education, national party candidate. The electors will not be aware of this status, and less likely to influence the behavior of the electors.
+
+## Distribution of numeric features
+```{r}
+p1 <- par(mfrow= c(2,3))
+hist(GW17$Total_Assets, col= 'grey', main = '', ylab='Total Assets')
+hist(GW17$Liabilities_P, col= 'grey', main = 'Histograms')
+hist(GW17$TOTAL.VOTES.POLLED, col= 'grey', main = '')
+hist(GW17$TotalElectors, col= 'grey', main = '')
+hist(GW17$TOTALVALIDVOTESPOLLED, col= 'grey', main = '')
+hist(GW17$CAND_AGE, col= 'grey', main = '')
+
+```
+
+#### Observation:
+* The histograms from the total dataset including all the positions and candidates who have contested the election
+
+```{r}
+p1 <- par(mfrow= c(2,3))
+hist(plt$Total_Assets, col= 'grey', main = '')
+hist(plt$Liabilities_P, col= 'grey', main = 'Histograms')
+hist(plt$TOTAL.VOTES.POLLED, col= 'grey', main = '')
+hist(plt$TotalElectors, col= 'grey', main = '')
+hist(plt$TOTALVALIDVOTESPOLLED, col= 'grey', main = '')
+hist(plt$CAND_AGE, col= 'grey', main = '')
+```
+
+#### Observation:
+* The distribution of the subset where only candidates securing above 6th place
+* The distribution resembles closely the distribution in the total dataset, and reducing the observation by position has not changed the distributions significantly
+
+```{r}
+library(corrplot)
+plt.cor <- plt
+plt.cor$POSITION <- as.numeric(plt$POSITION)
+plt.cor$CAND_AGE <- as.numeric(plt$CAND_AGE)
+plt.cor$Total_Assets <- as.numeric(plt.cor$Total_Assets)
+plt.cor$Liabilities_P <- as.numeric(plt.cor$Liabilities_P)
+plt.cor$Recontesting <- as.numeric(plt.cor$Recontesting)
+plt.cor$National_party_candidate <- as.numeric(plt.cor$National_party_candidate)
+plt.cor$Cand_corepathi <- as.numeric(plt.cor$Cand_corepathi)
+plt.cor$Cand_graduate_above <- as.numeric(plt.cor$Cand_graduate_above)
+
+cor1 <- plt.cor[,c(5,8,15,16,17,18,22,23)]
+plt.cor <- cor(cor1)
+#titanic.cor <- cor(titanic.cor[,c(2, 6, 7, 8, 10)])
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+corrplot(plt.cor, method="color", col=col(200),  
+         type="lower", order="hclust", 
+         addCoef.col = "black", # Add coefficient of correlation
+         tl.col="black", tl.srt=45, #Text label color and rotation
+         # Combine with significance
+         #p.mat = p.mat, sig.level = 0.01, insig = "blank", 
+         # hide correlation coefficient on the principal diagonal
+         diag=FALSE)
+```
+
+#### Observation:
+* The four features has weak to moderate positive correlation with Position are Candidate belonging to national party, Candidate age, Candidate Wealth, Recontesting candidates
+* Given that corepathi candidates have managed to win, means more the wealth more likely the positive result
+* Since no feature has correlation more 0.5 there are no strongly visible features which might help the model to discriminate well and may not have good predictive power while classifying the candidates
+
+
+# 6. Training classification models
+## 6.1 Goa state Election results Model
+
+#### Features in the dataset
+```{r}
+GW17 <- read.csv('Goa_Wrangled_data_5.csv')
+GW17$X <- NULL
+plt <- GW17
+plt$POSITION <- as.factor(plt$POSITION)
+#plt <- subset(GW17, GW17$POSITION<=5)
+#write.csv(plt, 'Goa_Wrangled_data_5.csv', row.names = FALSE)
+
+colnames(plt)
+```
+
+#### Observation:
+* The features which will used to traing the model
+
+#### Data descrition
+```{r}
+str(plt)
+```
+
+```{r}
+rm(list = c())
+#library(tidyverse,warn.conflicts = TRUE, quietly = TRUE)
+library(caret, warn.conflicts = TRUE, quietly = TRUE)
+library(MASS, warn.conflicts = TRUE, quietly = TRUE)
+library(biotools, warn.conflicts = TRUE, quietly = TRUE)
+library(dummies)
+```
+
+```{r}
+plt.copy <- plt
+plt.copy$POSITION <- factor(plt.copy$POSITION, levels = c(1:5), labels = c("Winner", "Second", "Third","Fourth","Fifth"))
+#plt.copy$Recontesting <- as.numeric(plt.copy$Recontesting)
+#plt.copy$Cand_corepathi <- as.numeric(plt.copy$Cand_corepathi)
+#plt.copy$Cand_graduate_above <- as.numeric(plt.copy$Cand_graduate_above)
+#plt.copy$Cand_filed_ITR <- as.numeric(plt.copy$Cand_filed_ITR)
+```
+
+
+```{r, eval=FALSE}
+#plt_T <- plt %>% caret::preProcess(method = "range")
+plt_T <- plt
+plt_T$POSITION <- factor(plt_T$POSITION, levels = c(1:5), labels = c("Winner", "Second", "Third","Fourth","Fifth"))
+
+preproc_t.param <- plt_T %>% 
+  preProcess(method = c("center", "scale"))
+plt_T <- preproc_t.param %>% predict(plt_T)
+
+plt_T$POSITION <- factor(plt_T$POSITION, levels = c(1:5), labels = c("Winner", "Second", "Third","Fourth","Fifth"))
+
+#plt_T <- plt_T %>% caret::preProcess(method = "range")
+plt_T <- plt_T[,c("POSITION","CAND_AGE","Total_Assets","Liabilities_P","Recontesting","National_party_candidate","Cand_corepathi","Cand_graduate_above","Cand_filed_ITR" )]
+plt_T <- plt %>% caret::preProcess(method = "range")
+#boxM(plt_T, plt_T$POSITION)
+#boxM()
+
+scaler <- function(x){}
+#View(plt_T)
+#str(plt_T)
+```
+
+### Splitting the data into training and test set
+```{r, echo=TRUE}
+set.seed(123)
+training.samples <- plt.copy$POSITION %>%
+  createDataPartition(p = 0.8, list = FALSE)
+train.data <- plt.copy[training.samples, ]
+test.data <- plt.copy[-training.samples, ]
+
+```
+
+#### Scaling the dataset
+```{r, echo=TRUE}
+# Estimate preprocessing parameters
+preproc.param <- train.data %>% 
+  preProcess(method = c("center", "scale"))
+# Transform the data using the estimated parameters
+train.transformed <- preproc.param %>% predict(train.data)
+test.transformed <- preproc.param %>% predict(test.data)
+
+```
+
+```{r}
+head(train.transformed)
+#boxM(train.transformed[,c("POSITION","CAND_AGE","Total_Assets","Liabilities_P","Recontesting","National_party_candidate","Cand_corepathi","Cand_graduate_above","Cand_filed_ITR" )], train.transformed$POSITION)
+#str(train.transformed)
+```
+
+#### Observation:
+* The scaled data for training the model
+
+
+### Traing the Linear Discriminant Analysis model
+```{r}
+mod_sub <- train.transformed[,c("POSITION","CAND_AGE","Total_Assets","Recontesting","National_party_candidate","Cand_corepathi","Cand_graduate_above","Criminal.Case","Winner_corepathi","Winner_graduate_above")]
+```
+
+```{r, echo=TRUE}
+model <- lda(POSITION~ ., data = mod_sub)
+```
+
+#### Observation:
+* The subset of the features used to guage the performance based on the selected features
+
+
+
+### Plot based on four important features
+```{r}
+plot(train.transformed[,c("CAND_AGE","Total_Assets","Recontesting","National_party_candidate")], col=train.transformed$POSITION)
+```
+
+#### Observation:
+* The LDA model will use combination of above features and other to find which combination of features better separates the group, winner group from other runner ups
+
+
+### Model results
+```{r}
+model
+```
+
+```{r}
+plot(model)
+```
+
+#### Observation:
+* The model classification is not accurate and finding difficult to create proper groupings, and the accuray would not be very high
+
+### Model outputs
+```{r}
+predictions <- model %>% predict(test.transformed)
+```
+
+
+```{r}
+cat("Predicted classes(head)","\n")
+# Predicted classes
+head(predictions$class, 6)
+cat('\n')
+cat("Predicted probabilities of class membership:","\n")
+# Predicted probabilities of class memebership.
+head(predictions$posterior, 6) 
+cat("\n")
+cat("Linear Discriminants:","\n")
+# Linear discriminants
+head(predictions$x, 3) 
+```
+
+```{r}
+lda.data <- cbind(train.transformed, predict(model)$x)
+ggplot(lda.data, aes(LD1, LD2)) +
+  geom_point(aes(color = POSITION))
+```
+
+#### Observation:
+* The discrimination of the classes based on first two LDAs
+* The model is able to discriminate well between the winner and loosing candidates. The model is considering the candidates who have not managed to win to be closely similar to each other and distinct from the winners
+
+
+### Model Accuracy
+```{r, echo=TRUE}
+mean(predictions$class==test.transformed$POSITION)
+```
+
+
+### Cross table of the prediction and actual label
+```{r, echo=TRUE}
+
+table(predictions$class, test.transformed$POSITION)
+```
+#### Observation:
+* As expected the accuray of the model is not that good, the model is not able to discriminate well among the data. But the it is able to distinguish between the winner, 1st position, and other remaining positions. The model is treating the candidates who have not won to be closely related in characteristic, then analysing which are the features that winners have that other remaining position would allow to identify important features which help to distinguish winners from candidates who have not managed to win. And one of the feature which can be identified is whether a candidate belongs to national party, then it is hightly probably that candidate would win and second would be if the candidate is recontesting feature
+* From the table it is clear that no one group has high correctly predicted results, except the winner group to some extent, all are scattered between the classes and winner has been predicted correctly for 6 observation out of the 8 observation in the sample single observation, which gives and accuracy for the winner group of 0.75 higher than among the other groups
+* Using the cross validation might help to improve the accuracy
+
+
+### Training the model with cross validation
+```{r}
+model <- lda(POSITION~ ., data = mod_sub, CV=TRUE)
+```
+
+```{r}
+table(model$class, train.transformed$POSITION)
+```
+
+#### Observation:
+* The Accuracy for the within winner group is 0.71 which is less than what the model of able to achieve without cross validation on the test set
+* The cross validation is able to do some what better for the other groups, but the results are not great. Given it has been not able to classify well the features doesn't have enough predictive which directly contributes in correctly classifying the winners
+
+### Removing winner related features which hightly correlated
+```{r, echo=TRUE}
+# The winner related features are removed which are highly correlated with
+# winner results and it shadows which would not be available while predicting
+# in real scenario
+plt.copy <- plt[,-c(1,2,3,4,6,7,9,10,11,12,14,19,20,21,25)]
+
+```
+
+### Model results
+```{r}
+plt.copy$POSITION <- factor(plt.copy$POSITION, levels = c(1:5), labels = c("Winner", "Second", "Third","Fourth","Fifth"))
+set.seed(123)
+training.samples <- plt.copy$POSITION %>%
+  createDataPartition(p = 0.8, list = FALSE)
+train.data <- plt.copy[training.samples, ]
+test.data <- plt.copy[-training.samples, ]
+
+# Estimate preprocessing parameters
+preproc.param <- train.data %>% 
+  preProcess(method = c("center", "scale"))
+# Transform the data using the estimated parameters
+train.transformed <- preproc.param %>% predict(train.data)
+test.transformed <- preproc.param %>% predict(test.data)
+
+model <- lda(POSITION~ ., data = train.transformed)
+
+model
+```
+
+### Model accuracy
+```{r}
+predictions <- model %>% predict(test.transformed)
+
+lda.data <- cbind(train.transformed, predict(model)$x)
+ggplot(lda.data, aes(LD1, LD2)) +
+  geom_point(aes(color = POSITION))
+```
+
+```{r}
+mean(predictions$class==test.transformed$POSITION)
+
+table(predictions$class, test.transformed$POSITION)
+```
+
+#### Observation:
+* The accuracy has droped as the winner related features was shadowing the winners which resulted that the model was able to distinguish only the winner group from the others and finding difficult to distinguish other groups from each other. Though at first time winner related features was included thinking that it is a good indicator.
+* But after thinking it through why only the winner is differentiated from others, then winner_corepathi, winner_graduate_above and winner_filed_ITR was actually a statistic after the results has been announced, which would not be known before the results. And would have been a error to build a model including those features.
+
+
+### Plot for pairs of features and error rates given by LDA
+```{r}
+library(klaR)
+mod_subet <- train.transformed[,c("POSITION","CAND_AGE","Total_Assets","Recontesting","National_party_candidate")]
+partimat(POSITION~., data=mod_subet, method='lda')
+```
+
+#### Observation:
+* No two pairs is able to get an accuracy of even 0.6 from the choosen subset of features, checking using more features to improve the model would be to see if model is able to find some combination of features to correctly discriminate the groups
+* The model is not able to distinguish the winner from others and within group accuracy is also very low, the features are not to able to signify the relation which a winning candidate would have, given the data it is a general information of the candidate which fails to lend any significant indicator other than it being a statistic of the election, which convesy the proportion of the results in different category
+* A more granular data like sentiment of the electors, GDP growth of the district, state under the previous elected candidate would be required to get some actual sense of the voting for a particular candidate
+* But as per initial exploratory data analysis if three key features which can be attributed to have an appeal to the electors would be Recontesting candidate, National party candidate, Political experience (Candidate age), and additional candidate wealth somehow indirectly makes a candidate to have power who can fulfill the needs of the electors
+
+```{r, results='asis', eval=(knitr::opts_knit$get('rmarkdown.pandoc.to') == 'latex')}
+cat('\\pagebreak')
+```
+
+## 6.2 Running the model for the Punjab state
+```{r}
+punjab <- read.csv("Punjab_wrangled_data.csv")
+age_cat <- function(x){
+  if (x <=35){
+      return("Below_36")
+  }
+  if((x<=45) & (x > 35)){
+    return("Between_36_45")
+  }
+  if((x<=55) & (x > 45)){
+    return("Between_46_55")
+  }
+  else{
+    return("Above_55")
+  }
+} 
+
+punjab$Age_category <- sapply(punjab$CAND_AGE, age_cat)
+
+head(punjab)
+```
+
+### Punjab state wrangled data set
+```{r, echo=TRUE}
+plt.copy <- subset(punjab, punjab$POSITION<=5)
+plt.copy$POSITION <- as.factor(plt.copy$POSITION)
+
+plt.copy$POSITION <- factor(plt.copy$POSITION, levels = c(1:5), labels = c("Winner", "Second", "Third","Fourth","Fifth"))
+
+colnames(plt.copy)
+```
+
+### subset of features for training the model
+```{r}
+# Features with winner related features
+plt.copy <- plt.copy[,-c(1,2,3,4,6,7,9,10,11,12,14,19,20,21,25)]
+
+
+```
+
+```{r}
+set.seed(123)
+training.samples <- plt.copy$POSITION %>%
+  createDataPartition(p = 0.8, list = FALSE)
+train.data <- plt.copy[training.samples, ]
+test.data <- plt.copy[-training.samples, ]
+
+# Estimate preprocessing parameters
+preproc.param <- train.data %>% 
+  preProcess(method = c("center", "scale"))
+# Transform the data using the estimated parameters
+train.transformed <- preproc.param %>% predict(train.data)
+test.transformed <- preproc.param %>% predict(test.data)
+```
+
+### Model output for punjab state
+```{r, echo=TRUE}
+model <- lda(POSITION~ ., data = train.transformed)
+
+model
+```
+
+### Testing the model with test data
+```{r, echo=TRUE}
+predictions <- model %>% predict(test.transformed)
+
+lda.data <- cbind(train.transformed, predict(model)$x)
+ggplot(lda.data, aes(LD1, LD2)) +
+  geom_point(aes(color = POSITION)) + ggtitle("Punjab's results seperation by LD1 and LD2")
+```
+
+#### Observation:
+* There is not clear separation of the candidates belonging to different, as the result is same as Goa states results as the same feature set is used. To get more predictive features would require features which are more specific to each state and more granular data for each district and candidate
+
+### Accuracy of the model
+```{r, echo=TRUE}
+mean(predictions$class==test.transformed$POSITION)
+
+table(predictions$class, test.transformed$POSITION)
+```
+#### Observation:
+* The accuracy is about 0.23, and cross table shows larege misclassification. It more looks like random allocation of observation, in this scenario a random guessing if adopted based on feature by painstakingly going through the results we might get the similar or if lucky a better accuracy
+
+## 6.3 Running the model for the Uttar Pradesh state
+```{r}
+UP <- read.csv("UP_wrangled_data.csv")
+age_cat <- function(x){
+  if (x <=35){
+      return("Below_36")
+  }
+  if((x<=45) & (x > 35)){
+    return("Between_36_45")
+  }
+  if((x<=55) & (x > 45)){
+    return("Between_46_55")
+  }
+  else{
+    return("Above_55")
+  }
+} 
+
+UP$Age_category <- sapply(UP$CAND_AGE, age_cat)
+
+head(UP)
+```
+
+```{r}
+UP <- UP %>% mutate_if(is.numeric, funs(replace(., is.na(.), 0)))
+colnames(UP)
+```
+
+```{r}
+plt.copy <- subset(UP, UP$POSITION<=5)
+plt.copy$POSITION <- as.factor(plt.copy$POSITION)
+
+plt.copy$POSITION <- factor(plt.copy$POSITION, levels = c(1:5), labels = c("Winner", "Second", "Third","Fourth","Fifth"))
+
+#plt.copy <- cbind(plt.copy, dummy(plt.copy$Age_category))
+#plt.copy <- cbind(plt.copy, dummy(plt.copy$Education))
+#plt.copy <- cbind(plt.copy, dummy(plt.copy$CAND_CATEGORY))
+#plt.copy <- cbind(plt.copy, dummy(plt.copy$CAND_SEX))
+
+```
+
+### Training the UP state model with few important features
+```{r, echo=TRUE}
+data_sub <- plt.copy[,c('POSITION','CAND_AGE','Criminal.Case','Total_Assets','Liabilities_P','Recontesting','National_party_candidate','Cand_corepathi','Cand_graduate_above','Cand_filed_ITR')]
+head(data_sub)
+```
+
+```{r}
+set.seed(123)
+training.samples <- data_sub$POSITION %>%
+  createDataPartition(p = 0.8, list = FALSE)
+train.data <- data_sub[training.samples, ]
+test.data <- data_sub[-training.samples, ]
+
+# Estimate preprocessing parameters
+preproc.param <- train.data %>% 
+  preProcess(method = c("center", "scale"))
+# Transform the data using the estimated parameters
+train.transformed <- preproc.param %>% predict(train.data)
+test.transformed <- preproc.param %>% predict(test.data)
+```
+
+```{r, echo=TRUE}
+model <- lda(POSITION~ ., data = train.transformed)
+
+model
+```
+
+```{r, echo=TRUE}
+predictions <- model %>% predict(test.transformed)
+
+lda.data <- cbind(train.transformed, predict(model)$x)
+ggplot(lda.data, aes(LD1, LD2)) +
+  geom_point(aes(color = POSITION))
+```
+
+```{r}
+mean(predictions$class==test.transformed$POSITION)
+
+table(predictions$class, test.transformed$POSITION)
+```
+
+### Interpretation of UP states model results:
+* The model accuracy is way better than what was achieved for other states, and as only few important features were used and UP state more observation the model was able to find some combination of LDA to attain the accuracy of 0.39
+* The LDA1 was able to discriminate among the position largely
+* And it is still not a good model which discriminates well the positions (results), of the candidates and the features which have been used to train the model are not the high influencing factors for a candidate to be able to win the election
+
+```{r, results='asis', eval=(knitr::opts_knit$get('rmarkdown.pandoc.to') == 'latex')}
+cat('\\pagebreak')
+```
+
+# 7. Project conclusion
+* The data which are basic ingredients for building predictive models and it is very important to have data which represents the underlying relations with the dependent variable
+* Given politics is a very complex subject and predicting election results would require a complex model with even more high quality granular data
+* It might require to build multiple models and complex intrepretation to improve the accuracy than what has been achieved using the above model and data
+
